@@ -7,7 +7,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
   - **Email**: `pratikravan0430@gmail.com`
   - **Password**: `Pratik@930`
 
-TrainTrack is a modern placement coordination dashboard for tracking training sessions, student attendance, and student placement logs.
+CampusPlace is a modern placement coordination dashboard for tracking training sessions, student attendance, and student placement logs.
 
 ## Getting Started
 

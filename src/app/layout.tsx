@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "TrainTrack - Placement Cell Dashboard",
+  title: "CampusPlace - Placement Cell Dashboard",
   description: "Training & Placement Cell session scheduling, attendance tracking, and feedback metrics.",
 };
 

@@ -20,7 +20,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
     if (pathname.startsWith('/sessions/')) return 'Session Details';
     if (pathname.startsWith('/sessions')) return 'Training Sessions';
     if (pathname.startsWith('/feedback')) return 'Feedback Logs';
-    return 'TrainTrack';
+    return 'CampusPlace';
   };
 
   return (

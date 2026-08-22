@@ -56,7 +56,7 @@ export default function LoginPage() {
       <div className="flex items-center gap-3 mb-8">
         <GraduationCap className="h-10 w-10 text-blue-600" />
         <span className="text-3xl font-extrabold tracking-tight text-slate-900">
-          Train<span className="text-blue-600">Track</span>
+          Campus<span className="text-blue-600">Place</span>
         </span>
       </div>
 

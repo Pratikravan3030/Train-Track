@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ArrowLeft, 
   Calendar, 
@@ -11,7 +11,11 @@ import {
   Star,
   AlertCircle,
   Save,
-  Send
+  Send,
+  Building2,
+  Filter,
+  Search,
+  CheckCheck
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -21,6 +25,7 @@ interface Student {
   name: string;
   rollNumber: string;
   branch: string;
+  year?: string;
 }
 
 interface FeedbackRecord {
@@ -52,6 +57,8 @@ interface SessionDetailData {
   feedback: FeedbackRecord[];
 }
 
+const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
+
 export default function SessionDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -64,6 +71,41 @@ export default function SessionDetailPage() {
   const [localAttendance, setLocalAttendance] = useState<Record<string, boolean>>({});
   const [savingAttendance, setSavingAttendance] = useState(false);
   const [attendanceMessage, setAttendanceMessage] = useState({ text: '', type: '' });
+  const [attendanceDeptFilter, setAttendanceDeptFilter] = useState('all');
+  const [attendanceYearFilter, setAttendanceYearFilter] = useState('all');
+  const [attendanceSearchQuery, setAttendanceSearchQuery] = useState('');
+
+  // Memoized list of branches for filtering
+  const branches = useMemo(() => {
+    if (!data) return [];
+    const set = new Set<string>();
+    data.students.forEach((s) => {
+      if (s.branch) set.add(s.branch);
+    });
+    return Array.from(set);
+  }, [data]);
+
+  // Filtered students for attendance sheet
+  const filteredStudents = useMemo(() => {
+    if (!data) return [];
+    return data.students.filter((student) => {
+      const matchDept = attendanceDeptFilter === 'all' || student.branch === attendanceDeptFilter;
+      const matchYear = attendanceYearFilter === 'all' || student.year === attendanceYearFilter;
+      const q = attendanceSearchQuery.toLowerCase().trim();
+      const matchQuery = !q || student.name.toLowerCase().includes(q) || student.rollNumber.toLowerCase().includes(q);
+      return matchDept && matchYear && matchQuery;
+    });
+  }, [data, attendanceDeptFilter, attendanceYearFilter, attendanceSearchQuery]);
+
+  const markAllVisible = (present: boolean) => {
+    setLocalAttendance((prev) => {
+      const next = { ...prev };
+      filteredStudents.forEach((s) => {
+        next[s._id] = present;
+      });
+      return next;
+    });
+  };
 
   // Feedback form states
   const [rating, setRating] = useState(5);
@@ -263,7 +305,7 @@ export default function SessionDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Attendance checklist panel */}
         <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-100 shadow-sm shadow-slate-100/50 p-6 flex flex-col">
-          <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h3 className="text-sm font-bold text-slate-800">Attendance Sheet</h3>
               <p className="text-[11px] text-slate-450 mt-0.5">Toggle student presence status and click Save</p>
@@ -271,11 +313,77 @@ export default function SessionDetailPage() {
             <button
               onClick={handleSaveAttendance}
               disabled={savingAttendance}
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors disabled:opacity-50 cursor-pointer shadow-sm shadow-blue-500/20"
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-colors disabled:opacity-50 cursor-pointer shadow-sm shadow-blue-500/20"
             >
               <Save className="h-3.5 w-3.5" />
               {savingAttendance ? 'Saving...' : 'Save Attendance'}
             </button>
+          </div>
+
+          {/* Filter Toolbar for Attendance */}
+          <div className="flex flex-col sm:flex-row gap-2 mb-4">
+            <div className="relative flex-1">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400">
+                <Search className="h-3.5 w-3.5" />
+              </span>
+              <input
+                type="text"
+                placeholder="Search students..."
+                value={attendanceSearchQuery}
+                onChange={(e) => setAttendanceSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+              />
+            </div>
+            <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200 text-xs">
+              <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              <select
+                value={attendanceDeptFilter}
+                onChange={(e) => setAttendanceDeptFilter(e.target.value)}
+                className="bg-transparent text-slate-700 font-medium focus:outline-none text-xs cursor-pointer max-w-[140px] truncate"
+              >
+                <option value="all">All Depts</option>
+                {branches.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200 text-xs">
+              <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              <select
+                value={attendanceYearFilter}
+                onChange={(e) => setAttendanceYearFilter(e.target.value)}
+                className="bg-transparent text-slate-700 font-medium focus:outline-none text-xs cursor-pointer max-w-[110px] truncate"
+              >
+                <option value="all">All Years</option>
+                {YEARS.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Bulk quick actions */}
+          <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100 text-[11px] text-slate-500">
+            <span>Showing <strong className="text-slate-700">{filteredStudents.length}</strong> students</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => markAllVisible(true)}
+                className="text-emerald-700 hover:text-emerald-800 font-semibold hover:underline cursor-pointer"
+              >
+                Mark visible Present
+              </button>
+              <span>•</span>
+              <button
+                type="button"
+                onClick={() => markAllVisible(false)}
+                className="text-red-650 hover:text-red-800 font-semibold hover:underline cursor-pointer"
+              >
+                Mark visible Absent
+              </button>
+            </div>
           </div>
 
           {/* Feedback messages for saving */}
@@ -290,9 +398,9 @@ export default function SessionDetailPage() {
           )}
 
           {/* Students list */}
-          <div className="flex-1 overflow-y-auto max-h-[500px] pr-1 space-y-2">
-            {students.length > 0 ? (
-              students.map((student) => {
+          <div className="flex-1 overflow-y-auto max-h-[460px] pr-1 space-y-2">
+            {filteredStudents.length > 0 ? (
+              filteredStudents.map((student) => {
                 const isPresent = localAttendance[student._id] ?? false;
                 return (
                   <div 
@@ -335,11 +443,27 @@ export default function SessionDetailPage() {
                 );
               })
             ) : (
-              <div className="flex flex-col items-center justify-center py-20 border border-dashed border-slate-200 rounded-xl text-center">
-                <p className="text-xs font-semibold text-slate-650">No students registered in directory</p>
-                <Link href="/students" className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-700">
-                  Register students first
-                </Link>
+              <div className="flex flex-col items-center justify-center py-16 border border-dashed border-slate-200 rounded-xl text-center px-4">
+                <p className="text-xs font-semibold text-slate-650">
+                  {students.length === 0
+                    ? 'No students registered in directory'
+                    : 'No matching students found in this department filter'}
+                </p>
+                {students.length === 0 ? (
+                  <Link href="/students" className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-700">
+                    Register students first
+                  </Link>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setAttendanceDeptFilter('all');
+                      setAttendanceSearchQuery('');
+                    }}
+                    className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                  >
+                    Show all students
+                  </button>
+                )}
               </div>
             )}
           </div>

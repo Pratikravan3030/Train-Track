@@ -48,7 +48,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <Link href="/" className="flex items-center gap-3" onClick={onClose}>
             <GraduationCap className="h-8 w-8 text-blue-400" />
             <span className="text-xl font-bold tracking-tight text-white">
-              Train<span className="text-blue-400">Track</span>
+              Campus<span className="text-blue-400">Place</span>
             </span>
           </Link>
           <button 
