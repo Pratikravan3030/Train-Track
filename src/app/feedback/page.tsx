@@ -23,6 +23,7 @@ interface Feedback {
     name: string;
     rollNumber: string;
   } | null;
+  source?: 'student' | 'staff';
   rating: number;
   comment: string;
   createdAt: string;
@@ -62,7 +63,8 @@ export default function FeedbackPage() {
         return res.json();
       })
       .then((data) => {
-        setFeedbackList(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : (data.data || []);
+        setFeedbackList(list);
         setError('');
       })
       .catch((err: unknown) => {
@@ -83,7 +85,7 @@ export default function FeedbackPage() {
         const res = await fetch('/api/sessions');
         if (res.ok && !ignore) {
           const data = await res.json();
-          setSessions(data);
+          setSessions(Array.isArray(data) ? data : (data.data || []));
         }
       } catch (err) {
         console.error('Failed to load sessions for filtering', err);
@@ -119,7 +121,8 @@ export default function FeedbackPage() {
 
         const data = await res.json();
         if (!ignore) {
-          setFeedbackList(Array.isArray(data) ? data : []);
+          const list = Array.isArray(data) ? data : (data.data || []);
+          setFeedbackList(list);
           setError('');
         }
       } catch (err: unknown) {
@@ -208,7 +211,12 @@ export default function FeedbackPage() {
               <div className="space-y-3.5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    {feedback.studentId ? (
+                    {feedback.source === 'staff' ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-slate-800">Staff Evaluation</span>
+                        <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200/60 px-2 py-0.5 rounded-full font-semibold">Staff Note</span>
+                      </div>
+                    ) : feedback.studentId ? (
                       <Link 
                         href={`/students/${feedback.studentId._id}`}
                         className="text-xs font-bold text-slate-800 hover:text-blue-650 hover:underline"
@@ -218,7 +226,7 @@ export default function FeedbackPage() {
                     ) : (
                       <span className="text-xs font-bold text-slate-450 italic">Anonymous Student</span>
                     )}
-                    {feedback.studentId?.rollNumber && (
+                    {feedback.studentId?.rollNumber && feedback.source !== 'staff' && (
                       <p className="text-[10px] font-mono text-slate-400 mt-0.5">{feedback.studentId.rollNumber}</p>
                     )}
                   </div>

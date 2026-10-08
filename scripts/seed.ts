@@ -8,6 +8,7 @@ import Student from '../src/models/Student';
 import TrainingSession from '../src/models/TrainingSession';
 import Attendance from '../src/models/Attendance';
 import Feedback from '../src/models/Feedback';
+import { resolveStudentDepartment } from '../src/lib/departmentMapper';
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -84,9 +85,16 @@ async function seed() {
     await Feedback.deleteMany({});
     console.log('Collections cleared.');
 
-    // Seed students
+    // Seed students with explicit department
     console.log('Seeding students...');
-    const createdStudents = await Student.insertMany(studentsData);
+    const studentsToInsert = studentsData.map((s) => ({
+      name: s.name,
+      rollNumber: s.rollNumber,
+      department: resolveStudentDepartment({ branch: s.branch }),
+      year: s.year,
+      email: s.email,
+    }));
+    const createdStudents = await Student.insertMany(studentsToInsert);
     console.log(`Inserted ${createdStudents.length} students.`);
 
     // Seed sessions

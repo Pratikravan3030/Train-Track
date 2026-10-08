@@ -15,7 +15,10 @@ import {
   RotateCcw
 } from 'lucide-react';
 import Link from 'next/link';
-import Modal from '@/components/Modal';
+import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useToast } from '@/components/ui/ToastContext';
+import { DEFAULT_DEPARTMENT_NAMES, DEFAULT_ACADEMIC_YEARS } from '@/config/collegeConfig';
 
 interface Student {
   _id: string;
@@ -26,17 +29,8 @@ interface Student {
   email: string;
 }
 
-const DEFAULT_BRANCHES = [
-  'Computer Science & Engineering',
-  'Information Technology',
-  'Electronics & Communication Engineering',
-  'Electrical Engineering',
-  'Mechanical Engineering',
-  'Civil Engineering',
-  'Other'
-];
-
-const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
+const DEFAULT_BRANCHES = DEFAULT_DEPARTMENT_NAMES;
+const YEARS = DEFAULT_ACADEMIC_YEARS;
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -45,18 +39,32 @@ export default function StudentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<string>('all');
+  const [serverFacets, setServerFacets] = useState<{
+    departmentCounts: Record<string, number>;
+    yearCounts: Record<string, number>;
+    totalAll: number;
+  } | null>(null);
 
   // Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const toast = useToast();
 
   // Form states
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    rollNumber: string;
+    branch: string;
+    year: string;
+    email: string;
+  }>({
     name: '',
     rollNumber: '',
-    branch: DEFAULT_BRANCHES[0],
-    year: YEARS[0],
+    branch: DEFAULT_BRANCHES[0] || '',
+    year: YEARS[0] || '',
     email: '',
   });
   const [formError, setFormError] = useState('');
@@ -90,8 +98,12 @@ export default function StudentsPage() {
         throw new Error(errData?.error || `Failed to fetch students (Status ${res.status})`);
       }
 
-      const data = await res.json();
-      setStudents(Array.isArray(data) ? data : []);
+      const result = await res.json();
+      const studentList = Array.isArray(result) ? result : (result.data || []);
+      setStudents(studentList);
+      if (result.facets) {
+        setServerFacets(result.facets);
+      }
       setError('');
     } catch (err: unknown) {
       console.error('[StudentsPage fetch error]:', err);
@@ -113,8 +125,18 @@ export default function StudentsPage() {
     return Array.from(branchSet);
   }, [students]);
 
-  // Compute student count per department
+  // Server-aggregated student count per department (accurate across all pages)
   const departmentCounts = useMemo(() => {
+    if (serverFacets?.departmentCounts) {
+      const counts: Record<string, number> = {
+        all: serverFacets.totalAll,
+      };
+      allBranches.forEach((b) => {
+        counts[b] = serverFacets.departmentCounts[b] || 0;
+      });
+      return counts;
+    }
+
     const counts: Record<string, number> = { all: students.length };
     allBranches.forEach((b) => {
       counts[b] = 0;
@@ -124,10 +146,20 @@ export default function StudentsPage() {
       counts[b] = (counts[b] || 0) + 1;
     });
     return counts;
-  }, [students, allBranches]);
+  }, [students, allBranches, serverFacets]);
 
-  // Compute student count per year of study
+  // Server-aggregated student count per academic year
   const yearCounts = useMemo(() => {
+    if (serverFacets?.yearCounts) {
+      const counts: Record<string, number> = {
+        all: serverFacets.totalAll,
+      };
+      YEARS.forEach((y) => {
+        counts[y] = serverFacets.yearCounts[y] || 0;
+      });
+      return counts;
+    }
+
     const counts: Record<string, number> = { all: students.length };
     YEARS.forEach((y) => {
       counts[y] = 0;
@@ -139,7 +171,7 @@ export default function StudentsPage() {
       }
     });
     return counts;
-  }, [students]);
+  }, [students, serverFacets]);
 
   const handleOpenAdd = () => {
     setFormData({
@@ -204,6 +236,7 @@ export default function StudentsPage() {
       }
 
       setIsAddOpen(false);
+      toast.success('Student registered successfully!');
       fetchStudents();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Server error occurred.';
@@ -239,6 +272,7 @@ export default function StudentsPage() {
       }
 
       setIsEditOpen(false);
+      toast.success('Student record updated successfully!');
       fetchStudents();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Server error occurred.';
@@ -248,25 +282,28 @@ export default function StudentsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this student? All their attendance and feedback logs will be permanently deleted.')) {
-      return;
-    }
+  const executeDelete = async () => {
+    if (!deleteTarget) return;
 
     try {
-      const res = await fetch(`/api/students/${id}`, {
+      setDeleting(true);
+      const res = await fetch(`/api/students/${deleteTarget._id}`, {
         method: 'DELETE',
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to delete student');
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to delete student');
       }
 
+      toast.success(`Student "${deleteTarget.name}" deleted successfully.`);
+      setDeleteTarget(null);
       fetchStudents();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to delete student';
-      alert(message);
+      toast.error(message);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -627,7 +664,7 @@ export default function StudentsPage() {
                         <Edit2 className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(student._id)}
+                        onClick={() => setDeleteTarget(student)}
                         className="inline-flex items-center justify-center p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                         title="Delete student"
                       >
@@ -828,6 +865,19 @@ export default function StudentsPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={executeDelete}
+        loading={deleting}
+        title="Delete Student Record"
+        description={`Are you sure you want to permanently delete "${deleteTarget?.name}" (${deleteTarget?.rollNumber})? All associated attendance and feedback logs will be permanently deleted.`}
+        confirmText="Delete Student"
+        cancelText="Cancel"
+        variant="danger"
+      />
     </div>
   );
 }

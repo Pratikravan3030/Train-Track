@@ -1,20 +1,16 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/db';
+import User from '@/models/User';
 import Student from '@/models/Student';
 import TrainingSession from '@/models/TrainingSession';
 import Attendance from '@/models/Attendance';
 import Feedback from '@/models/Feedback';
+import { requirePermission } from '@/lib/auth-guards';
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json(
-      { error: 'Unauthorized. Please sign in to access system health diagnostics.' },
-      { status: 401 }
-    );
-  }
+  // SUPER_ADMIN only via central RBAC policy
+  const auth = await requirePermission('health', 'read');
+  if (!auth.authorized) return auth.response;
 
   const envStatus = {
     MONGODB_URI: Boolean(process.env.MONGODB_URI),
@@ -29,6 +25,7 @@ export async function GET() {
   let dbConnected = false;
   let dbError: string | null = null;
   let counts = {
+    users: 0,
     students: 0,
     trainingsessions: 0,
     attendances: 0,
@@ -39,7 +36,8 @@ export async function GET() {
     const mongooseInstance = await dbConnect();
     dbConnected = mongooseInstance.connection.readyState === 1;
 
-    const [studentsCount, sessionsCount, attendanceCount, feedbackCount] = await Promise.all([
+    const [usersCount, studentsCount, sessionsCount, attendanceCount, feedbackCount] = await Promise.all([
+      User.countDocuments(),
       Student.countDocuments(),
       TrainingSession.countDocuments(),
       Attendance.countDocuments(),
@@ -47,6 +45,7 @@ export async function GET() {
     ]);
 
     counts = {
+      users: usersCount,
       students: studentsCount,
       trainingsessions: sessionsCount,
       attendances: attendanceCount,
@@ -74,9 +73,7 @@ export async function GET() {
         allRequiredEnvVarsPresent:
           envStatus.MONGODB_URI &&
           envStatus.NEXTAUTH_SECRET &&
-          envStatus.NEXTAUTH_URL &&
-          envStatus.ADMIN_EMAIL &&
-          envStatus.ADMIN_PASSWORD,
+          envStatus.NEXTAUTH_URL,
       },
     },
     { status: 200 }

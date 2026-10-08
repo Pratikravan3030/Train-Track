@@ -6,13 +6,20 @@ import {
   Calendar, 
   Star, 
   ArrowRight,
-  TrendingUp,
   AlertCircle,
   Plus,
-  Sparkles
+  Sparkles,
+  Award,
+  CheckCircle2,
+  Clock
 } from 'lucide-react';
 import Link from 'next/link';
-import DashboardChart from '@/components/DashboardChart';
+import { COLLEGE_CONFIG } from '@/config/collegeConfig';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SkeletonMetric, Skeleton } from '@/components/ui/Skeleton';
+import { DepartmentChart, YearDistributionChart, RatingTrendChart } from '@/components/DashboardCharts';
 
 interface UpcomingSession {
   _id: string;
@@ -21,17 +28,34 @@ interface UpcomingSession {
   trainer: string;
 }
 
-interface SessionRating {
+interface RatingData {
   title: string;
   averageRating: number;
+}
+
+interface DeptData {
+  department: string;
+  students: number;
+}
+
+interface YearData {
+  year: string;
+  students: number;
 }
 
 interface StatsData {
   totalStudents: number;
   totalSessions: number;
+  totalAttendanceRecords: number;
+  overallAttendanceRate: number;
+  totalFeedbacks: number;
   averageRating: number;
-  sessionRatings: SessionRating[];
+  departmentDistribution: DeptData[];
+  yearDistribution: YearData[];
+  sessionRatings: RatingData[];
   upcomingSessions: UpcomingSession[];
+  userRole?: string;
+  department?: string;
 }
 
 export default function Dashboard() {
@@ -41,6 +65,8 @@ export default function Dashboard() {
 
   const loadStats = useCallback(async () => {
     try {
+      setLoading(true);
+      setError('');
       const res = await fetch('/api/dashboard-stats');
 
       if (!res.ok) {
@@ -54,11 +80,11 @@ export default function Dashboard() {
 
         const errData = await res.json().catch(() => null);
         const serverError = errData?.error ? `: ${errData.error}` : '';
-
-        if (res.status >= 500) {
-          throw new Error(`Server error (${res.status})${serverError}. Please check MongoDB Atlas connection.`);
-        }
-        throw new Error(errData?.error || `Failed to fetch dashboard stats (Status ${res.status})`);
+        throw new Error(
+          res.status >= 500
+            ? `Server error (${res.status})${serverError}. Please check MongoDB Atlas connection.`
+            : `Failed to load dashboard metrics (Status ${res.status})`
+        );
       }
 
       const data = await res.json();
@@ -88,7 +114,11 @@ export default function Dashboard() {
           }
           const errData = await res.json().catch(() => null);
           const serverError = errData?.error ? `: ${errData.error}` : '';
-          throw new Error(res.status >= 500 ? `Server error (${res.status})${serverError}. Please check MongoDB Atlas connection.` : `Request failed (${res.status})`);
+          throw new Error(
+            res.status >= 500
+              ? `Server error (${res.status})${serverError}. Please check database connection.`
+              : `Request failed (${res.status})`
+          );
         }
         const data = await res.json();
         if (!ignore) {
@@ -111,194 +141,302 @@ export default function Dashboard() {
   }, []);
 
   const handleRetry = () => {
-    setLoading(true);
-    setError('');
     loadStats();
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <SkeletonMetric />
+          <SkeletonMetric />
+          <SkeletonMetric />
+          <SkeletonMetric />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Skeleton className="h-80 w-full rounded-2xl" />
+          <Skeleton className="h-80 w-full rounded-2xl" />
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] p-6 bg-white border border-red-150 rounded-2xl text-center shadow-sm">
-        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-        <h3 className="text-lg font-bold text-slate-800">Failed to Load Dashboard</h3>
-        <p className="text-sm text-slate-500 mt-2 max-w-md">{error}</p>
-        <button
-          onClick={handleRetry}
-          className="mt-5 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-sm cursor-pointer"
-        >
+      <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 bg-white border border-red-150 rounded-3xl text-center shadow-xs">
+        <div className="h-12 w-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mb-3 border border-red-100">
+          <AlertCircle className="h-6 w-6" />
+        </div>
+        <h3 className="text-base font-bold text-slate-800">Failed to Load Dashboard</h3>
+        <p className="text-xs text-slate-500 mt-1.5 max-w-md leading-relaxed">{error}</p>
+        <Button onClick={handleRetry} variant="primary" size="md" className="mt-5">
           Retry Connection
-        </button>
+        </Button>
       </div>
     );
   }
 
-  const { totalStudents, totalSessions, averageRating, sessionRatings, upcomingSessions } = stats!;
-  const isDatabaseEmpty = totalStudents === 0 && totalSessions === 0;
+  const {
+    totalStudents,
+    totalSessions,
+    overallAttendanceRate,
+    averageRating,
+    departmentDistribution,
+    yearDistribution,
+    sessionRatings,
+    upcomingSessions,
+  } = stats!;
+
+  const isFreshDatabase = totalStudents === 0 && totalSessions === 0;
 
   return (
     <div className="space-y-8">
-      {/* Onboarding Empty Banner if fresh database */}
-      {isDatabaseEmpty && (
-        <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-blue-600" />
-              <h3 className="text-base font-bold text-slate-800">Welcome to CampusPlace!</h3>
-            </div>
-            <p className="text-xs text-slate-600 max-w-xl">
-              Your database is connected and ready. Add students to the directory and schedule your first training session to unlock live performance metrics.
-            </p>
+      {/* College T&P Header Banner */}
+      <div className="p-6 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-950 text-white rounded-3xl shadow-sm border border-blue-900/40 flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <Badge variant="warning" size="sm" className="bg-amber-400/20 text-amber-300 border-amber-300/30">
+              {COLLEGE_CONFIG.institution.shortName}
+            </Badge>
+            <span className="text-xs text-blue-200 font-medium">Kasaba Bawada, Kolhapur</span>
           </div>
-          <div className="flex items-center gap-2.5 shrink-0">
-            <Link
-              href="/students"
-              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
-            >
+          <h2 className="text-lg sm:text-xl font-black tracking-tight text-white">
+            {COLLEGE_CONFIG.tpCell.headerTitle}
+          </h2>
+          <p className="text-xs text-blue-200/90 max-w-xl">
+            Real-time tracking of student eligibility, department distributions, training sessions, and placement metrics.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <Link href="/students">
+            <Button variant="primary" size="sm" className="bg-blue-600 hover:bg-blue-500 text-white">
+              <Plus className="h-3.5 w-3.5 mr-1" />
               Add Student
-            </Link>
-            <Link
-              href="/sessions"
-              className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors shadow-sm"
-            >
+            </Button>
+          </Link>
+          <Link href="/sessions">
+            <Button variant="outline" size="sm" className="bg-white/10 hover:bg-white/20 text-white border-white/20">
+              <Calendar className="h-3.5 w-3.5 mr-1" />
               Schedule Session
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="flex items-center justify-between p-6 bg-white rounded-2xl border border-slate-100 shadow-sm shadow-slate-100/50 hover:shadow-md transition-all duration-200">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Students</p>
-            <h3 className="text-3xl font-extrabold text-slate-800 mt-2">{totalStudents}</h3>
-            <p className="text-xs text-slate-500 mt-1">Registered in directory</p>
-          </div>
-          <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl">
-            <Users className="h-6 w-6" />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between p-6 bg-white rounded-2xl border border-slate-100 shadow-sm shadow-slate-100/50 hover:shadow-md transition-all duration-200">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Sessions</p>
-            <h3 className="text-3xl font-extrabold text-slate-800 mt-2">{totalSessions}</h3>
-            <p className="text-xs text-slate-500 mt-1">Conducted & scheduled</p>
-          </div>
-          <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl">
-            <Calendar className="h-6 w-6" />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between p-6 bg-white rounded-2xl border border-slate-100 shadow-sm shadow-slate-100/50 hover:shadow-md transition-all duration-200">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Average Rating</p>
-            <div className="flex items-baseline gap-2 mt-2">
-              <h3 className="text-3xl font-extrabold text-slate-800">{averageRating.toFixed(2)}</h3>
-              <span className="text-sm font-semibold text-slate-400">/ 5.0</span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1">From student feedback</p>
-          </div>
-          <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl">
-            <Star className="h-6 w-6 fill-current" />
-          </div>
+            </Button>
+          </Link>
         </div>
       </div>
 
-      {/* Stats Chart and Table Section */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 p-6 bg-white rounded-2xl border border-slate-100 shadow-sm shadow-slate-100/50">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-base font-bold text-slate-800">Session Performance</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Average feedback ratings across sessions</p>
+      {/* Fresh Database Welcome Onboarding */}
+      {isFreshDatabase && (
+        <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-blue-600" />
+              <h3 className="text-sm font-bold text-slate-800">Fresh T&P Database Connected</h3>
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full">
-              <TrendingUp className="h-3.5 w-3.5" />
-              Rating metrics
+            <p className="text-xs text-slate-600 max-w-xl leading-relaxed">
+              Your database is clean and authenticated. Begin by adding student records or scheduling your first training module to populate live statistics.
+            </p>
+          </div>
+          <Link href="/students">
+            <Button variant="primary" size="sm">
+              Register First Student
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {/* Primary KPI Metrics Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Students */}
+        <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Enrolled</span>
+            <div className="h-9 w-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Users className="h-5 w-5" />
             </div>
           </div>
-          
-          {sessionRatings.length > 0 ? (
-            <DashboardChart data={sessionRatings} />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-[300px] border border-dashed border-slate-200 rounded-2xl text-center px-4">
-              <TrendingUp className="h-10 w-10 text-slate-300 mb-2" />
-              <p className="text-sm font-medium text-slate-500">No session rating data available yet</p>
-              <p className="text-xs text-slate-400 mt-1">Ratings will populate once feedback is recorded for sessions.</p>
-            </div>
-          )}
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-black text-slate-900">{totalStudents}</span>
+            <span className="text-[11px] text-slate-400 font-semibold">Students</span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">Across all departments</p>
         </div>
 
-        <div className="p-6 bg-white rounded-2xl border border-slate-100 shadow-sm shadow-slate-100/50 flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-bold text-slate-800">Upcoming Sessions</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Next scheduled classes</p>
+        {/* Training Sessions */}
+        <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Training Modules</span>
+            <div className="h-9 w-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <Calendar className="h-5 w-5" />
             </div>
-            <Link 
-              href="/sessions" 
-              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-50 transition-colors"
-              title="Schedule a session"
-            >
-              <Plus className="h-5 w-5" />
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-black text-slate-900">{totalSessions}</span>
+            <span className="text-[11px] text-slate-400 font-semibold">Conducted</span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">Skill & aptitude workshops</p>
+        </div>
+
+        {/* Overall Attendance Rate */}
+        <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Attendance Rate</span>
+            <div className="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-black text-slate-900">{overallAttendanceRate}%</span>
+            <span className="text-[11px] text-emerald-600 font-bold">Verified</span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">Across training sessions</p>
+        </div>
+
+        {/* Average Session Feedback */}
+        <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Average Rating</span>
+            <div className="h-9 w-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Star className="h-5 w-5 fill-amber-500 text-amber-500" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-black text-slate-900">{averageRating.toFixed(2)}</span>
+            <span className="text-[11px] text-slate-400 font-semibold">/ 5.0</span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">Student evaluation average</p>
+        </div>
+      </div>
+
+      {/* Placement Drives & Package KPIs Clean Empty State (Phase 4 Ready) */}
+      <div className="p-6 bg-white rounded-3xl border border-slate-100 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <Award className="h-5 w-5 text-blue-600" />
+            <h3 className="text-sm font-bold text-slate-800">Placement Drives & Offer Analytics</h3>
+          </div>
+          <Badge variant="neutral" size="sm">
+            Phase 4 Placement Engine
+          </Badge>
+        </div>
+
+        <div className="py-6 px-4 rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 text-center flex flex-col items-center justify-center">
+          <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2.5">
+            <Award className="h-5 w-5" />
+          </div>
+          <p className="text-xs font-bold text-slate-800">No active placement drives or offer letters recorded yet</p>
+          <p className="text-[11px] text-slate-500 max-w-md mt-1 leading-relaxed">
+            Eligible student shortlisting, recruiter job descriptions, CTC packages, and offer tracking will be initialized in Phase 4 when the placement workflow engine is activated.
+          </p>
+        </div>
+      </div>
+
+      {/* Analytics Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Department Distribution Chart */}
+        <div className="p-6 bg-white rounded-3xl border border-slate-100 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Department Distribution</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">Live student enrollment count per engineering department</p>
+            </div>
+            <Link href="/students" className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+              <span>View All</span>
+              <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
+          <DepartmentChart data={departmentDistribution} />
+        </div>
 
-          <div className="flex-1 overflow-y-auto max-h-[300px] pr-1 space-y-3.5">
-            {upcomingSessions.length > 0 ? (
-              upcomingSessions.map((session) => (
-                <div 
-                  key={session._id} 
-                  className="p-3.5 border border-slate-100 rounded-xl hover:border-blue-100 hover:bg-blue-50/20 transition-all group"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-bold text-slate-800 group-hover:text-blue-900 transition-colors">
+        {/* Academic Year Distribution Chart */}
+        <div className="p-6 bg-white rounded-3xl border border-slate-100 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Year-wise Batch Trend</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">Students enrolled across 1st, 2nd, 3rd, and 4th years</p>
+            </div>
+            <Badge variant="purple" size="sm">
+              Batch Cohort
+            </Badge>
+          </div>
+          <YearDistributionChart data={yearDistribution} />
+        </div>
+      </div>
+
+      {/* Rating Analytics & Upcoming Sessions Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Session Satisfaction Trend */}
+        <div className="lg:col-span-2 p-6 bg-white rounded-3xl border border-slate-100 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Training Session Feedback Trend</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">Average qualitative rating received per training module</p>
+            </div>
+            <Link href="/feedback" className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+              <span>Feedback Logs</span>
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <RatingTrendChart data={sessionRatings} />
+        </div>
+
+        {/* Upcoming Sessions Widget */}
+        <div className="p-6 bg-white rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-800">Upcoming Schedule</h3>
+              <Link href="/sessions" className="text-xs font-semibold text-blue-600 hover:text-blue-700">
+                View All
+              </Link>
+            </div>
+
+            {upcomingSessions.length === 0 ? (
+              <EmptyState
+                icon={Calendar}
+                title="No Upcoming Sessions"
+                description="No upcoming workshops or aptitude sessions are currently scheduled."
+                action={
+                  <Link href="/sessions">
+                    <Button variant="outline" size="sm">
+                      Schedule Now
+                    </Button>
+                  </Link>
+                }
+                className="py-8 border-none shadow-none"
+              />
+            ) : (
+              <div className="divide-y divide-slate-100 mt-2">
+                {upcomingSessions.map((session) => (
+                  <div key={session._id} className="py-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/sessions/${session._id}`}
+                        className="text-xs font-bold text-slate-800 hover:text-blue-600 truncate block"
+                      >
                         {session.title}
-                      </h4>
-                      <p className="text-xs text-slate-500">
-                        Trainer: <span className="font-medium">{session.trainer || 'Unassigned'}</span>
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        {new Date(session.date).toLocaleDateString('en-US', {
-                          weekday: 'short',
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
+                      </Link>
+                      <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                        Trainer: {session.trainer || 'T&P Cell'}
                       </p>
                     </div>
-                    <Link
-                      href={`/sessions/${session._id}`}
-                      className="p-1.5 bg-slate-50 text-slate-500 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm"
-                    >
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-400 shrink-0">
+                      <Clock className="h-3 w-3" />
+                      <span>{new Date(session.date).toLocaleDateString()}</span>
+                    </div>
                   </div>
-                </div>
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center py-10 border border-dashed border-slate-200 rounded-xl text-center">
-                <Calendar className="h-8 w-8 text-slate-300 mb-2" />
-                <p className="text-xs font-semibold text-slate-600">No upcoming sessions</p>
-                <Link
-                  href="/sessions"
-                  className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-700"
-                >
-                  Schedule one now
-                </Link>
+                ))}
               </div>
             )}
           </div>
+
+          <Link href="/sessions" className="block pt-2">
+            <Button variant="outline" size="sm" className="w-full">
+              Manage Sessions Calendar
+            </Button>
+          </Link>
         </div>
       </div>
     </div>

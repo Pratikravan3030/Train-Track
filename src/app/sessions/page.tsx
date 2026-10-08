@@ -12,7 +12,9 @@ import {
   User
 } from 'lucide-react';
 import Link from 'next/link';
-import Modal from '@/components/Modal';
+import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useToast } from '@/components/ui/ToastContext';
 
 interface TrainingSession {
   _id: string;
@@ -32,6 +34,9 @@ export default function SessionsPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [currentSession, setCurrentSession] = useState<TrainingSession | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TrainingSession | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const toast = useToast();
 
   // Form states
   const [formData, setFormData] = useState({
@@ -71,8 +76,9 @@ export default function SessionsPage() {
         throw new Error(errData?.error || `Failed to fetch sessions (Status ${res.status})`);
       }
 
-      const data = await res.json();
-      setSessions(Array.isArray(data) ? data : []);
+      const result = await res.json();
+      const sessionList = Array.isArray(result) ? result : (result.data || []);
+      setSessions(sessionList);
       setError('');
     } catch (err: unknown) {
       console.error('[SessionsPage fetch error]:', err);
@@ -145,6 +151,7 @@ export default function SessionsPage() {
       }
 
       setIsAddOpen(false);
+      toast.success('Training session scheduled successfully!');
       fetchSessions();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Server error occurred.';
@@ -180,6 +187,7 @@ export default function SessionsPage() {
       }
 
       setIsEditOpen(false);
+      toast.success('Training session updated successfully!');
       fetchSessions();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Server error occurred.';
@@ -189,25 +197,28 @@ export default function SessionsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this session? All associated attendance and feedback logs will be permanently deleted.')) {
-      return;
-    }
+  const executeDelete = async () => {
+    if (!deleteTarget) return;
 
     try {
-      const res = await fetch(`/api/sessions/${id}`, {
+      setDeleting(true);
+      const res = await fetch(`/api/sessions/${deleteTarget._id}`, {
         method: 'DELETE',
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to delete session');
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to delete session');
       }
 
+      toast.success(`Session "${deleteTarget.title}" deleted successfully.`);
+      setDeleteTarget(null);
       fetchSessions();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to delete session';
-      alert(message);
+      toast.error(message);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -344,7 +355,7 @@ export default function SessionsPage() {
                       <Edit2 className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(session._id)}
+                      onClick={() => setDeleteTarget(session)}
                       className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                       title="Delete session"
                     >
@@ -518,6 +529,19 @@ export default function SessionsPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={executeDelete}
+        loading={deleting}
+        title="Delete Training Session"
+        description={`Are you sure you want to permanently delete "${deleteTarget?.title}"? All student attendance and feedback logs associated with this session will be permanently deleted.`}
+        confirmText="Delete Session"
+        cancelText="Cancel"
+        variant="danger"
+      />
     </div>
   );
 }
