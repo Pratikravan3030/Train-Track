@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { GraduationCap, Lock, Mail, AlertCircle, Key } from 'lucide-react';
 
 export default function LoginPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,7 +37,7 @@ export default function LoginPage() {
       } else {
         router.replace('/');
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred. Please try again.');
       setLoading(false);
     }

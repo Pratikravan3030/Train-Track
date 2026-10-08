@@ -50,15 +50,34 @@ export default function SessionsPage() {
   async function fetchSessions() {
     try {
       setLoading(true);
-      const res = await fetch('/api/sessions');
-      if (!res.ok) {
-        throw new Error('Failed to fetch training sessions');
-      }
-      const data = await res.json();
-      setSessions(data);
       setError('');
-    } catch (err: any) {
-      setError(err.message || 'An error occurred while loading training sessions.');
+      const res = await fetch('/api/sessions');
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          setError('Session expired. Redirecting to login...');
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1200);
+          return;
+        }
+
+        const errData = await res.json().catch(() => null);
+        const serverError = errData?.error ? `: ${errData.error}` : '';
+
+        if (res.status >= 500) {
+          throw new Error(`Server error (${res.status})${serverError}. Please verify MongoDB Atlas connection and IP whitelist.`);
+        }
+        throw new Error(errData?.error || `Failed to fetch sessions (Status ${res.status})`);
+      }
+
+      const data = await res.json();
+      setSessions(Array.isArray(data) ? data : []);
+      setError('');
+    } catch (err: unknown) {
+      console.error('[SessionsPage fetch error]:', err);
+      const message = err instanceof Error ? err.message : 'An error occurred while loading training sessions.';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -127,8 +146,9 @@ export default function SessionsPage() {
 
       setIsAddOpen(false);
       fetchSessions();
-    } catch (err: any) {
-      setFormError(err.message || 'Server error occurred.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Server error occurred.';
+      setFormError(message);
     } finally {
       setSubmitting(false);
     }
@@ -161,8 +181,9 @@ export default function SessionsPage() {
 
       setIsEditOpen(false);
       fetchSessions();
-    } catch (err: any) {
-      setFormError(err.message || 'Server error occurred.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Server error occurred.';
+      setFormError(message);
     } finally {
       setSubmitting(false);
     }
@@ -184,8 +205,9 @@ export default function SessionsPage() {
       }
 
       fetchSessions();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete session');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete session';
+      alert(message);
     }
   };
 
@@ -235,10 +257,16 @@ export default function SessionsPage() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       ) : error ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="flex flex-col items-center justify-center py-16 text-center px-4">
           <AlertCircle className="h-10 w-10 text-red-500 mb-2" />
           <p className="text-sm font-semibold text-slate-700">Error loading sessions</p>
-          <p className="text-xs text-slate-500 mt-1">{error}</p>
+          <p className="text-xs text-slate-500 mt-1 max-w-md">{error}</p>
+          <button
+            onClick={() => fetchSessions()}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 transition-colors cursor-pointer shadow-sm"
+          >
+            Retry Connection
+          </button>
         </div>
       ) : filteredSessions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-100 shadow-sm rounded-2xl text-center px-4">

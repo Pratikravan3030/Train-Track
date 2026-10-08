@@ -1,40 +1,53 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable');
+declare global {
+  var mongooseCache: {
+    conn: typeof mongoose | null;
+    promise: Promise<typeof mongoose> | null;
+  } | undefined;
 }
 
-let cached = (global as any).mongoose;
+let cached = global.mongooseCache;
 
 if (!cached) {
-  cached = (global as any).mongoose = { conn: null, promise: null };
+  cached = global.mongooseCache = { conn: null, promise: null };
 }
 
-async function dbConnect() {
-  if (cached.conn) {
-    return cached.conn;
+async function dbConnect(): Promise<typeof mongoose> {
+  const uri = process.env.MONGODB_URI;
+
+  if (!uri) {
+    const errorMsg = 'MONGODB_URI environment variable is not defined.';
+    console.error(`[dbConnect Error]: ${errorMsg}`);
+    throw new Error(errorMsg);
   }
 
-  if (!cached.promise) {
-    const opts = {
+  if (cached!.conn) {
+    return cached!.conn;
+  }
+
+  if (!cached!.promise) {
+    const opts: mongoose.ConnectOptions = {
       bufferCommands: false,
+      serverSelectionTimeoutMS: 5000, // Fail fast in 5s on serverless rather than default 30s
+      connectTimeoutMS: 10000,
     };
 
-    cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongooseInstance) => {
+    cached!.promise = mongoose.connect(uri, opts).then((mongooseInstance) => {
       return mongooseInstance;
     });
   }
 
   try {
-    cached.conn = await cached.promise;
-  } catch (e) {
-    cached.promise = null;
+    cached!.conn = await cached!.promise;
+  } catch (e: unknown) {
+    cached!.promise = null; // Clear rejected promise so subsequent requests can retry
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    console.error('[dbConnect Error] Failed to connect to MongoDB:', errorMsg);
     throw e;
   }
 
-  return cached.conn;
+  return cached!.conn;
 }
 
 export default dbConnect;

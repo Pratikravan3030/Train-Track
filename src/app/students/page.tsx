@@ -69,15 +69,34 @@ export default function StudentsPage() {
   async function fetchStudents() {
     try {
       setLoading(true);
-      const res = await fetch('/api/students');
-      if (!res.ok) {
-        throw new Error('Failed to fetch students');
-      }
-      const data = await res.json();
-      setStudents(data);
       setError('');
-    } catch (err: any) {
-      setError(err.message || 'An error occurred while loading students.');
+      const res = await fetch('/api/students');
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          setError('Session expired. Redirecting to login...');
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1200);
+          return;
+        }
+
+        const errData = await res.json().catch(() => null);
+        const serverError = errData?.error ? `: ${errData.error}` : '';
+
+        if (res.status >= 500) {
+          throw new Error(`Server error (${res.status})${serverError}. Please verify MongoDB Atlas connection and IP whitelist.`);
+        }
+        throw new Error(errData?.error || `Failed to fetch students (Status ${res.status})`);
+      }
+
+      const data = await res.json();
+      setStudents(Array.isArray(data) ? data : []);
+      setError('');
+    } catch (err: unknown) {
+      console.error('[StudentsPage fetch error]:', err);
+      const message = err instanceof Error ? err.message : 'An error occurred while loading students.';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -186,8 +205,9 @@ export default function StudentsPage() {
 
       setIsAddOpen(false);
       fetchStudents();
-    } catch (err: any) {
-      setFormError(err.message || 'Server error occurred.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Server error occurred.';
+      setFormError(message);
     } finally {
       setSubmitting(false);
     }
@@ -220,8 +240,9 @@ export default function StudentsPage() {
 
       setIsEditOpen(false);
       fetchStudents();
-    } catch (err: any) {
-      setFormError(err.message || 'Server error occurred.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Server error occurred.';
+      setFormError(message);
     } finally {
       setSubmitting(false);
     }
@@ -243,8 +264,9 @@ export default function StudentsPage() {
       }
 
       fetchStudents();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete student');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete student';
+      alert(message);
     }
   };
 
@@ -519,10 +541,16 @@ export default function StudentsPage() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="flex flex-col items-center justify-center py-16 text-center px-4">
             <AlertCircle className="h-10 w-10 text-red-500 mb-2" />
             <p className="text-sm font-semibold text-slate-700">Error loading student list</p>
-            <p className="text-xs text-slate-500 mt-1">{error}</p>
+            <p className="text-xs text-slate-500 mt-1 max-w-md">{error}</p>
+            <button
+              onClick={() => fetchStudents()}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 transition-colors cursor-pointer shadow-sm"
+            >
+              Retry Connection
+            </button>
           </div>
         ) : filteredStudents.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-4">
@@ -532,14 +560,14 @@ export default function StudentsPage() {
                 ? 'No matching students found'
                 : selectedDepartment !== 'all'
                 ? `No students found in ${selectedDepartment}`
-                : 'No students registered'}
+                : 'No students yet – Add Student or Import CSV'}
             </h4>
             <p className="text-xs text-slate-500 mt-1 max-w-sm">
               {searchQuery 
                 ? 'Try adjusting your keywords or search query to locate the record.' 
                 : selectedDepartment !== 'all'
                 ? `No student records found under ${selectedDepartment}. You can register students directly to this department or clear the department filter.`
-                : 'Get started by registering your first student in the coordination dashboard.'}
+                : 'Your student directory is currently empty. Get started by registering your first student in the coordination dashboard.'}
             </p>
             <div className="mt-4 flex items-center gap-3">
               {isFiltered && (

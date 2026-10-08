@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
   Calendar, 
@@ -8,7 +8,8 @@ import {
   ArrowRight,
   TrendingUp,
   AlertCircle,
-  Plus
+  Plus,
+  Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
 import DashboardChart from '@/components/DashboardChart';
@@ -38,24 +39,82 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/dashboard-stats');
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          setError('Session expired. Redirecting to login...');
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1200);
+          return;
+        }
+
+        const errData = await res.json().catch(() => null);
+        const serverError = errData?.error ? `: ${errData.error}` : '';
+
+        if (res.status >= 500) {
+          throw new Error(`Server error (${res.status})${serverError}. Please check MongoDB Atlas connection.`);
+        }
+        throw new Error(errData?.error || `Failed to fetch dashboard stats (Status ${res.status})`);
+      }
+
+      const data = await res.json();
+      setStats(data);
+      setError('');
+    } catch (err: unknown) {
+      console.error('[Dashboard fetch error]:', err);
+      const message = err instanceof Error ? err.message : 'An error occurred while loading dashboard statistics.';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    async function fetchStats() {
+    let ignore = false;
+    async function init() {
       try {
         const res = await fetch('/api/dashboard-stats');
         if (!res.ok) {
-          throw new Error('Failed to fetch dashboard stats');
+          if (res.status === 401) {
+            if (!ignore) setError('Session expired. Redirecting to login...');
+            setTimeout(() => {
+              window.location.href = '/login';
+            }, 1200);
+            return;
+          }
+          const errData = await res.json().catch(() => null);
+          const serverError = errData?.error ? `: ${errData.error}` : '';
+          throw new Error(res.status >= 500 ? `Server error (${res.status})${serverError}. Please check MongoDB Atlas connection.` : `Request failed (${res.status})`);
         }
         const data = await res.json();
-        setStats(data);
-      } catch (err: any) {
-        setError(err.message || 'An error occurred while loading dashboard statistics.');
+        if (!ignore) {
+          setStats(data);
+          setError('');
+        }
+      } catch (err: unknown) {
+        console.error('[Dashboard fetch error]:', err);
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : 'An error occurred while loading dashboard statistics.');
+        }
       } finally {
-        setLoading(false);
+        if (!ignore) setLoading(false);
       }
     }
-
-    fetchStats();
+    init();
+    return () => {
+      ignore = true;
+    };
   }, []);
+
+  const handleRetry = () => {
+    setLoading(true);
+    setError('');
+    loadStats();
+  };
 
   if (loading) {
     return (
@@ -67,24 +126,54 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] p-6 bg-white border border-red-100 rounded-2xl text-center">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] p-6 bg-white border border-red-150 rounded-2xl text-center shadow-sm">
         <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
         <h3 className="text-lg font-bold text-slate-800">Failed to Load Dashboard</h3>
         <p className="text-sm text-slate-500 mt-2 max-w-md">{error}</p>
         <button
-          onClick={() => window.location.reload()}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors"
+          onClick={handleRetry}
+          className="mt-5 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-sm cursor-pointer"
         >
-          Retry
+          Retry Connection
         </button>
       </div>
     );
   }
 
   const { totalStudents, totalSessions, averageRating, sessionRatings, upcomingSessions } = stats!;
+  const isDatabaseEmpty = totalStudents === 0 && totalSessions === 0;
 
   return (
     <div className="space-y-8">
+      {/* Onboarding Empty Banner if fresh database */}
+      {isDatabaseEmpty && (
+        <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-blue-600" />
+              <h3 className="text-base font-bold text-slate-800">Welcome to CampusPlace!</h3>
+            </div>
+            <p className="text-xs text-slate-600 max-w-xl">
+              Your database is connected and ready. Add students to the directory and schedule your first training session to unlock live performance metrics.
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <Link
+              href="/students"
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
+            >
+              Add Student
+            </Link>
+            <Link
+              href="/sessions"
+              className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors shadow-sm"
+            >
+              Schedule Session
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Metrics Row */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <div className="flex items-center justify-between p-6 bg-white rounded-2xl border border-slate-100 shadow-sm shadow-slate-100/50 hover:shadow-md transition-all duration-200">
@@ -141,9 +230,10 @@ export default function Dashboard() {
           {sessionRatings.length > 0 ? (
             <DashboardChart data={sessionRatings} />
           ) : (
-            <div className="flex flex-col items-center justify-center h-[300px] border border-dashed border-slate-200 rounded-2xl text-center">
+            <div className="flex flex-col items-center justify-center h-[300px] border border-dashed border-slate-200 rounded-2xl text-center px-4">
               <TrendingUp className="h-10 w-10 text-slate-300 mb-2" />
               <p className="text-sm font-medium text-slate-500">No session rating data available yet</p>
+              <p className="text-xs text-slate-400 mt-1">Ratings will populate once feedback is recorded for sessions.</p>
             </div>
           )}
         </div>

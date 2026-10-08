@@ -8,7 +8,7 @@ import Feedback from '@/models/Feedback';
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> | any }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session) {
@@ -36,14 +36,15 @@ export async function GET(
       .sort({ createdAt: -1 });
 
     return NextResponse.json({ student, attendance, feedback }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function PUT(
   request: Request,
-  { params }: { params: Promise<{ id: string }> | any }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session) {
@@ -88,14 +89,15 @@ export async function PUT(
     }
 
     return NextResponse.json(updatedStudent, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> | any }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session) {
@@ -118,7 +120,8 @@ export async function DELETE(
     await Feedback.deleteMany({ studentId: id });
 
     return NextResponse.json({ message: 'Student and related records deleted successfully' }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -21,8 +21,9 @@ export async function GET(request: Request) {
     await dbConnect();
     const attendance = await Attendance.find({ sessionId }).populate('studentId', 'name rollNumber branch');
     return NextResponse.json(attendance, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -56,7 +57,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ message: 'Attendance updated successfully' }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

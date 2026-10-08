@@ -14,8 +14,9 @@ export async function GET() {
     await dbConnect();
     const sessions = await TrainingSession.find({}).sort({ date: -1 });
     return NextResponse.json(sessions, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -43,7 +44,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(newSession, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

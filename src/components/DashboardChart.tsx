@@ -20,21 +20,29 @@ interface DashboardChartProps {
   data: ChartData[];
 }
 
-export default function DashboardChart({ data }: DashboardChartProps) {
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="p-3 bg-slate-900 text-white rounded-xl shadow-lg border border-slate-800 text-xs">
-          <p className="font-semibold mb-1">{payload[0].payload.title}</p>
-          <p className="text-blue-400">
-            Avg Rating: <span className="font-bold">{payload[0].value.toFixed(2)} / 5.0</span>
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    value: number;
+    payload: ChartData;
+  }>;
+}
 
+function CustomTooltip({ active, payload }: CustomTooltipProps) {
+  if (active && payload && payload.length) {
+    return (
+      <div className="p-3 bg-slate-900 text-white rounded-xl shadow-lg border border-slate-800 text-xs">
+        <p className="font-semibold mb-1">{payload[0].payload.title}</p>
+        <p className="text-blue-400">
+          Avg Rating: <span className="font-bold">{payload[0].value.toFixed(2)} / 5.0</span>
+        </p>
+      </div>
+    );
+  }
+  return null;
+}
+
+export default function DashboardChart({ data }: DashboardChartProps) {
   return (
     <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">

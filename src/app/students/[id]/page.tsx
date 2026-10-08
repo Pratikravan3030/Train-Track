@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   ArrowLeft, 
   User, 
@@ -57,27 +57,81 @@ export default function StudentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (id) {
-      fetchStudentDetails();
-    }
-  }, [id]);
-
-  async function fetchStudentDetails() {
+  const loadStudentDetails = useCallback(async () => {
+    if (!id) return;
     try {
       setLoading(true);
+      setError('');
       const res = await fetch(`/api/students/${id}`);
+
       if (!res.ok) {
-        throw new Error('Failed to load student details');
+        if (res.status === 401) {
+          setError('Session expired. Redirecting to login...');
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1200);
+          return;
+        }
+
+        const errData = await res.json().catch(() => null);
+        const serverError = errData?.error ? `: ${errData.error}` : '';
+
+        if (res.status >= 500) {
+          throw new Error(`Server error (${res.status})${serverError}. Please check database connection.`);
+        }
+        throw new Error(errData?.error || `Failed to load student details (Status ${res.status})`);
       }
+
       const result = await res.json();
       setData(result);
-    } catch (err: any) {
-      setError(err.message || 'An error occurred while loading profile.');
+      setError('');
+    } catch (err: unknown) {
+      console.error('[StudentDetailPage fetch error]:', err);
+      const message = err instanceof Error ? err.message : 'An error occurred while loading profile.';
+      setError(message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
+
+  useEffect(() => {
+    let ignore = false;
+    async function init() {
+      if (!id) return;
+      try {
+        setError('');
+        const res = await fetch(`/api/students/${id}`);
+        if (!res.ok) {
+          if (res.status === 401) {
+            if (!ignore) setError('Session expired. Redirecting to login...');
+            setTimeout(() => {
+              window.location.href = '/login';
+            }, 1200);
+            return;
+          }
+          const errData = await res.json().catch(() => null);
+          const serverError = errData?.error ? `: ${errData.error}` : '';
+          throw new Error(res.status >= 500 ? `Server error (${res.status})${serverError}. Please check database connection.` : `Failed to load details (${res.status})`);
+        }
+        const result = await res.json();
+        if (!ignore) {
+          setData(result);
+          setError('');
+        }
+      } catch (err: unknown) {
+        console.error('[StudentDetailPage fetch error]:', err);
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : 'An error occurred while loading profile.');
+        }
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
+  }, [id]);
 
   if (loading) {
     return (
@@ -93,13 +147,21 @@ export default function StudentDetailPage() {
         <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
         <h3 className="text-lg font-bold text-slate-800">Failed to Load Profile</h3>
         <p className="text-sm text-slate-500 mt-2 max-w-md">{error || 'Student profile not found.'}</p>
-        <Link
-          href="/students"
-          className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Students
-        </Link>
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            onClick={loadStudentDetails}
+            className="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl hover:bg-slate-200 transition-colors cursor-pointer"
+          >
+            Retry Connection
+          </button>
+          <Link
+            href="/students"
+            className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Students
+          </Link>
+        </div>
       </div>
     );
   }
@@ -109,7 +171,6 @@ export default function StudentDetailPage() {
   // Calculate statistics
   const totalSessions = attendance.length;
   const sessionsAttended = attendance.filter((a) => a.present).length;
-  const attendanceRate = totalSessions > 0 ? ((sessionsAttended / totalSessions) * 105).toFixed(0) : '0'; // Adjusted for UI
   const realRate = totalSessions > 0 ? ((sessionsAttended / totalSessions) * 100).toFixed(0) : '0';
 
   return (
@@ -261,7 +322,7 @@ export default function StudentDetailPage() {
                     </div>
                     {record.comment && (
                       <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                        "{record.comment}"
+                        &ldquo;{record.comment}&rdquo;
                       </p>
                     )}
                     <p className="text-[10px] text-slate-400">

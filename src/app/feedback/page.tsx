@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   MessageSquare, 
   Filter, 
   Star, 
-  AlertCircle,
-  Calendar
+  AlertCircle
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -36,47 +35,113 @@ export default function FeedbackPage() {
   const [error, setError] = useState('');
   const [selectedSessionId, setSelectedSessionId] = useState('all');
 
-  useEffect(() => {
-    // Fetch initial sessions for the filter dropdown
-    fetchSessions();
-  }, []);
+  const handleRetry = useCallback(() => {
+    setLoading(true);
+    setError('');
+    const url = selectedSessionId && selectedSessionId !== 'all'
+      ? `/api/feedback?sessionId=${selectedSessionId}`
+      : '/api/feedback';
 
-  useEffect(() => {
-    fetchFeedback();
+    fetch(url)
+      .then(async (res) => {
+        if (!res.ok) {
+          if (res.status === 401) {
+            setError('Session expired. Redirecting to login...');
+            setTimeout(() => {
+              window.location.href = '/login';
+            }, 1200);
+            return;
+          }
+          const errData = await res.json().catch(() => null);
+          const serverError = errData?.error ? `: ${errData.error}` : '';
+          if (res.status >= 500) {
+            throw new Error(`Server error (${res.status})${serverError}. Please verify MongoDB Atlas connection and IP whitelist.`);
+          }
+          throw new Error(errData?.error || `Failed to fetch feedback logs (Status ${res.status})`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        setFeedbackList(Array.isArray(data) ? data : []);
+        setError('');
+      })
+      .catch((err: unknown) => {
+        console.error('[FeedbackPage fetch error]:', err);
+        const message = err instanceof Error ? err.message : 'An error occurred while loading feedback logs.';
+        setError(message);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [selectedSessionId]);
 
-  async function fetchSessions() {
-    try {
-      const res = await fetch('/api/sessions');
-      if (res.ok) {
-        const data = await res.json();
-        setSessions(data);
-      }
-    } catch (err) {
-      console.error('Failed to load sessions for filtering', err);
-    }
-  }
+  useEffect(() => {
+    let ignore = false;
 
-  async function fetchFeedback() {
-    try {
-      setLoading(true);
-      const url = selectedSessionId && selectedSessionId !== 'all'
-        ? `/api/feedback?sessionId=${selectedSessionId}`
-        : '/api/feedback';
-      
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error('Failed to fetch feedback logs');
+    async function loadSessions() {
+      try {
+        const res = await fetch('/api/sessions');
+        if (res.ok && !ignore) {
+          const data = await res.json();
+          setSessions(data);
+        }
+      } catch (err) {
+        console.error('Failed to load sessions for filtering', err);
       }
-      const data = await res.json();
-      setFeedbackList(data);
-      setError('');
-    } catch (err: any) {
-      setError(err.message || 'An error occurred while loading feedback logs.');
-    } finally {
-      setLoading(false);
     }
-  }
+
+    async function loadFeedback() {
+      try {
+        const url = selectedSessionId && selectedSessionId !== 'all'
+          ? `/api/feedback?sessionId=${selectedSessionId}`
+          : '/api/feedback';
+
+        const res = await fetch(url);
+        if (ignore) return;
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            setError('Session expired. Redirecting to login...');
+            setTimeout(() => {
+              window.location.href = '/login';
+            }, 1200);
+            return;
+          }
+
+          const errData = await res.json().catch(() => null);
+          const serverError = errData?.error ? `: ${errData.error}` : '';
+
+          if (res.status >= 500) {
+            throw new Error(`Server error (${res.status})${serverError}. Please verify MongoDB Atlas connection and IP whitelist.`);
+          }
+          throw new Error(errData?.error || `Failed to fetch feedback logs (Status ${res.status})`);
+        }
+
+        const data = await res.json();
+        if (!ignore) {
+          setFeedbackList(Array.isArray(data) ? data : []);
+          setError('');
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          console.error('[FeedbackPage fetch error]:', err);
+          const message = err instanceof Error ? err.message : 'An error occurred while loading feedback logs.';
+          setError(message);
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadSessions();
+    loadFeedback();
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedSessionId]);
 
   return (
     <div className="space-y-6">
@@ -111,19 +176,25 @@ export default function FeedbackPage() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       ) : error ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="flex flex-col items-center justify-center py-16 text-center px-4">
           <AlertCircle className="h-10 w-10 text-red-500 mb-2" />
           <p className="text-sm font-semibold text-slate-700">Error loading feedback</p>
-          <p className="text-xs text-slate-500 mt-1">{error}</p>
+          <p className="text-xs text-slate-500 mt-1 max-w-md">{error}</p>
+          <button
+            onClick={handleRetry}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 transition-colors cursor-pointer shadow-sm"
+          >
+            Retry Connection
+          </button>
         </div>
       ) : feedbackList.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-100 shadow-sm rounded-2xl text-center px-4">
           <MessageSquare className="h-12 w-12 text-slate-300 mb-3" />
-          <h4 className="text-sm font-bold text-slate-700">No feedback entries found</h4>
+          <h4 className="text-sm font-bold text-slate-700">No feedback entries yet</h4>
           <p className="text-xs text-slate-500 mt-1 max-w-xs">
             {selectedSessionId !== 'all'
               ? 'This specific training session has not received any feedback comments yet.'
-              : 'There are no feedback submissions recorded in the database.'}
+              : 'There are no feedback submissions recorded in the database yet.'}
           </p>
         </div>
       ) : (
@@ -169,7 +240,7 @@ export default function FeedbackPage() {
 
                 {feedback.comment ? (
                   <p className="text-xs text-slate-650 bg-slate-50 border border-slate-100/70 p-3 rounded-xl leading-relaxed italic">
-                    "{feedback.comment}"
+                    &ldquo;{feedback.comment}&rdquo;
                   </p>
                 ) : (
                   <p className="text-xs text-slate-400 italic">No comment provided.</p>

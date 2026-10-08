@@ -12,7 +12,15 @@ import Feedback from '../src/models/Feedback';
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
-  console.error('Please define the MONGODB_URI environment variable inside .env');
+  console.error('❌ Error: MONGODB_URI environment variable is not defined.');
+  process.exit(1);
+}
+
+// Safety guard: refuse to run unless ALLOW_SEED=true is explicitly provided
+if (process.env.ALLOW_SEED !== 'true') {
+  console.error('\n❌ SEED REFUSED: Database seeding is destructive and wipes existing data.');
+  console.error('To proceed, you must explicitly set the environment variable: ALLOW_SEED=true');
+  console.error('Example: ALLOW_SEED=true npm run seed\n');
   process.exit(1);
 }
 
@@ -59,8 +67,14 @@ const comments = [
 async function seed() {
   try {
     console.log('Connecting to database...');
-    await mongoose.connect(MONGODB_URI!);
-    console.log('Connected.');
+    await mongoose.connect(MONGODB_URI!, {
+      serverSelectionTimeoutMS: 5000,
+    });
+    
+    const dbName = mongoose.connection.name || 'unknown';
+    const dbHost = mongoose.connection.host || 'unknown';
+    console.log(`Connected to database: "${dbName}" on host: "${dbHost}"`);
+    console.log(`⚠️  WIPING ALL DATA IN DATABASE: "${dbName}"...`);
 
     // Clear existing data
     console.log('Clearing old collections...');
@@ -131,9 +145,11 @@ async function seed() {
     await Feedback.insertMany(feedbackRecords);
     console.log(`Inserted ${feedbackRecords.length} feedback entries.`);
 
-    console.log('Database seeding completed successfully!');
-  } catch (err) {
-    console.error('Seeding failed:', err);
+    console.log(`Database seeding completed successfully for database "${dbName}"!`);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error('Seeding failed:', errorMsg);
+    process.exit(1);
   } finally {
     await mongoose.connection.close();
     console.log('Database connection closed.');

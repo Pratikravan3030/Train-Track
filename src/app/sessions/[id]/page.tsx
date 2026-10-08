@@ -1,21 +1,18 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   ArrowLeft, 
   Calendar, 
   User, 
   MessageSquare,
-  CheckCircle2,
-  XCircle,
   Star,
   AlertCircle,
   Save,
   Send,
   Building2,
   Filter,
-  Search,
-  CheckCheck
+  Search
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -115,40 +112,99 @@ export default function SessionDetailPage() {
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState('');
 
-  useEffect(() => {
-    if (id) {
-      fetchSessionDetails();
-    }
-  }, [id]);
-
-  async function fetchSessionDetails() {
+  const loadSessionDetails = useCallback(async () => {
+    if (!id) return;
     try {
       setLoading(true);
+      setError('');
       const res = await fetch(`/api/sessions/${id}`);
+
       if (!res.ok) {
-        throw new Error('Failed to load session details');
+        if (res.status === 401) {
+          setError('Session expired. Redirecting to login...');
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1200);
+          return;
+        }
+
+        const errData = await res.json().catch(() => null);
+        const serverError = errData?.error ? `: ${errData.error}` : '';
+
+        if (res.status >= 500) {
+          throw new Error(`Server error (${res.status})${serverError}. Please check database connection.`);
+        }
+        throw new Error(errData?.error || `Failed to load session details (Status ${res.status})`);
       }
+
       const result: SessionDetailData = await res.json();
       setData(result);
 
       // Initialize local attendance map
       const attendanceMap: Record<string, boolean> = {};
-      // 1. Set all students to absent by default
       result.students.forEach((student) => {
         attendanceMap[student._id] = false;
       });
-      // 2. Override with existing marked records
       result.attendance.forEach((record) => {
         attendanceMap[record.studentId] = record.present;
       });
       setLocalAttendance(attendanceMap);
       setError('');
-    } catch (err: any) {
-      setError(err.message || 'An error occurred while loading session details.');
+    } catch (err: unknown) {
+      console.error('[SessionDetailPage fetch error]:', err);
+      const message = err instanceof Error ? err.message : 'An error occurred while loading session details.';
+      setError(message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
+
+  useEffect(() => {
+    let ignore = false;
+    async function init() {
+      if (!id) return;
+      try {
+        setError('');
+        const res = await fetch(`/api/sessions/${id}`);
+        if (!res.ok) {
+          if (res.status === 401) {
+            if (!ignore) setError('Session expired. Redirecting to login...');
+            setTimeout(() => {
+              window.location.href = '/login';
+            }, 1200);
+            return;
+          }
+          const errData = await res.json().catch(() => null);
+          const serverError = errData?.error ? `: ${errData.error}` : '';
+          throw new Error(res.status >= 500 ? `Server error (${res.status})${serverError}. Please check database connection.` : `Failed to load details (${res.status})`);
+        }
+        const result: SessionDetailData = await res.json();
+        if (!ignore) {
+          setData(result);
+          const attendanceMap: Record<string, boolean> = {};
+          result.students.forEach((student) => {
+            attendanceMap[student._id] = false;
+          });
+          result.attendance.forEach((record) => {
+            attendanceMap[record.studentId] = record.present;
+          });
+          setLocalAttendance(attendanceMap);
+          setError('');
+        }
+      } catch (err: unknown) {
+        console.error('[SessionDetailPage fetch error]:', err);
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : 'An error occurred while loading session details.');
+        }
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
+  }, [id]);
 
   const toggleAttendance = (studentId: string, isPresent: boolean) => {
     setLocalAttendance((prev) => ({
@@ -178,15 +234,16 @@ export default function SessionDetailPage() {
       });
 
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Failed to save attendance logs');
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.error || 'Failed to save attendance logs');
       }
 
       setAttendanceMessage({ text: 'Attendance sheet saved successfully!', type: 'success' });
       // Clear message after 3 seconds
       setTimeout(() => setAttendanceMessage({ text: '', type: '' }), 3000);
-    } catch (err: any) {
-      setAttendanceMessage({ text: err.message || 'An error occurred.', type: 'error' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'An error occurred.';
+      setAttendanceMessage({ text: message, type: 'error' });
     } finally {
       setSavingAttendance(false);
     }
@@ -211,9 +268,9 @@ export default function SessionDetailPage() {
         body: JSON.stringify(payload),
       });
 
-      const resData = await res.json();
+      const resData = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(resData.error || 'Failed to submit feedback');
+        throw new Error(resData?.error || 'Failed to submit feedback');
       }
 
       // Reset feedback form
@@ -223,9 +280,10 @@ export default function SessionDetailPage() {
       setIsAnonymous(true);
 
       // Refresh data
-      fetchSessionDetails();
-    } catch (err: any) {
-      setFeedbackError(err.message || 'Server error occurred.');
+      loadSessionDetails();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Server error occurred.';
+      setFeedbackError(message);
     } finally {
       setSubmittingFeedback(false);
     }
@@ -245,13 +303,21 @@ export default function SessionDetailPage() {
         <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
         <h3 className="text-lg font-bold text-slate-800">Failed to Load Session</h3>
         <p className="text-sm text-slate-500 mt-2 max-w-md">{error || 'Training session details not found.'}</p>
-        <Link
-          href="/sessions"
-          className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Sessions
-        </Link>
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            onClick={loadSessionDetails}
+            className="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl hover:bg-slate-200 transition-colors cursor-pointer"
+          >
+            Retry Connection
+          </button>
+          <Link
+            href="/sessions"
+            className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Sessions
+          </Link>
+        </div>
       </div>
     );
   }
@@ -589,7 +655,7 @@ export default function SessionDetailPage() {
                     </div>
                     {f.comment && (
                       <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 leading-relaxed italic">
-                        "{f.comment}"
+                        &ldquo;{f.comment}&rdquo;
                       </p>
                     )}
                     <p className="text-[9px] text-slate-400">
