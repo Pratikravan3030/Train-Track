@@ -71,10 +71,16 @@ const StudentSchema: Schema = new Schema({
     index: true,
   },
   placementDetails: {
-    companyName: { type: String, trim: true },
-    packageLPA: { type: Number, min: 0 },
-    placedDate: { type: Date },
-    reasonForStatusChange: { type: String, trim: true },
+    type: new Schema(
+      {
+        companyName: { type: String, trim: true },
+        packageLPA: { type: Number, min: 0 },
+        placedDate: { type: Date },
+        reasonForStatusChange: { type: String, trim: true },
+      },
+      { _id: false }
+    ),
+    default: undefined,
   },
   cgpa: { type: Number, min: 0, max: 10, default: null },
   backlogs: { type: Number, min: 0, default: null },

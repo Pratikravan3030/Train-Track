@@ -40,6 +40,7 @@ export interface IOffer extends Document {
   tier?: OfferTierName | null;
   offerLetterUrl?: string;
   offerLetterStorageKey?: string;
+  offerLetterFilename?: string;
   status: OfferStatus;
   offerDate: Date;
   decidedAt?: Date;
@@ -112,6 +113,10 @@ const OfferSchema = new Schema(
       trim: true,
     },
     offerLetterStorageKey: {
+      type: String,
+      trim: true,
+    },
+    offerLetterFilename: {
       type: String,
       trim: true,
     },

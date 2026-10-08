@@ -19,7 +19,7 @@ export interface StorageAdapter {
    * Saves a file to the storage provider under a random UUID key.
    */
   saveFile(params: {
-    folder: 'resumes' | 'offers';
+    folder: 'resumes' | 'offers' | 'offer-letters';
     buffer: Buffer;
     contentType?: string;
   }): Promise<StorageFileResult>;

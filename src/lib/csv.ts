@@ -93,13 +93,38 @@ export function splitCsvRows(text: string): string[][] {
 }
 
 /**
+ * Sanitizes fields against CSV / Spreadsheet formula injection.
+ * Any value starting with =, +, -, @, \t, or \r is prefixed with a single quote.
+ */
+export function sanitizeCsvFormulaInjection(val: string): string {
+  if (!val || typeof val !== 'string') return val;
+  const firstChar = val.charAt(0);
+  if (firstChar === '=' || firstChar === '+' || firstChar === '-' || firstChar === '@' || firstChar === '\t' || firstChar === '\r') {
+    return `'${val}`;
+  }
+  return val;
+}
+
+/**
+ * Escapes a single CSV field value per RFC 4180 rules and formula injection protection.
+ */
+export function escapeCsvField(field: string, sanitizeFormulas = true): string {
+  const val = sanitizeFormulas ? sanitizeCsvFormulaInjection(field) : field;
+  if (val.includes('"') || val.includes(',') || val.includes('\n') || val.includes('\r')) {
+    return `"${val.replace(/"/g, '""')}"`;
+  }
+  return val;
+}
+
+/**
  * Converts array of records into RFC 4180 CSV string.
  */
 export function serializeCsv(
   headers: { key: string; label: string }[],
-  data: Record<string, unknown>[]
+  data: Record<string, unknown>[],
+  options: { sanitizeFormulas?: boolean } = { sanitizeFormulas: true }
 ): string {
-  const headerLine = headers.map((h) => escapeCsvField(h.label)).join(',');
+  const headerLine = headers.map((h) => escapeCsvField(h.label, false)).join(',');
   const lines: string[] = [headerLine];
 
   for (const row of data) {
@@ -108,21 +133,11 @@ export function serializeCsv(
         const val = row[h.key];
         if (val === null || val === undefined) return '';
         if (val instanceof Date) return val.toISOString().split('T')[0];
-        return escapeCsvField(String(val));
+        return escapeCsvField(String(val), options.sanitizeFormulas ?? true);
       })
       .join(',');
     lines.push(rowLine);
   }
 
   return lines.join('\r\n');
-}
-
-/**
- * Escapes a single CSV field value per RFC 4180 rules.
- */
-export function escapeCsvField(field: string): string {
-  if (field.includes('"') || field.includes(',') || field.includes('\n') || field.includes('\r')) {
-    return `"${field.replace(/"/g, '""')}"`;
-  }
-  return field;
 }
