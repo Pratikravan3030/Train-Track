@@ -25,14 +25,15 @@ Prior to CampusPlace, placement officers, department faculty coordinators, and t
 - **Institution Analytics**: Server-side MongoDB aggregations for real-time placement statistics, attendance rates, and rating distributions.
 - **Administrative User Lifecycle**: Self-service user provisioning, temporary password issuance, forced first-login password changes, instant session revocation, and audit logging.
 
-### Current Maturity Level: Production-Ready Student Management & Cohort Engine (Phases 1, 2, & 3 Completed)
-- **Status**: Production-ready core backend, UI, and student cohort management engine.
+### Current Maturity Level: Production-Ready Placement Drives, Eligibility Engine & Offer Workflow (Phases 1, 2, 3a, & 4 Implemented; Phase 3b Backlog Tracked)
+- **Status**: Production-ready core backend, institutional placement drive pipeline, eligibility engine, offer workflow, and pluggable cloud storage adapter. (Note: Phase 3 is not described as complete; missing student profile extension items are tracked under Phase 3b backlog).
 - **Security & Authorization**: Default-deny central RBAC policy across all API routes, token-version session invalidation, server-side forced password change enforcement, and campus-NAT-tolerant anti-DOS rate limiting. Strict placement status governance (TPO/Admin only with mandatory reason when de-listing from Placed status).
-- **Batch Isolation**: All student lists, imports, exports, and dashboard metrics strictly partition by `passoutYear` (batch) defaulting to `DEFAULT_PASSOUT_YEAR` (`2026`) so adjacent cohorts never mix.
-- **Resume Storage**: Secure PDF resume upload handler (`/api/students/[id]/resume`) with magic-byte verification, 5MB limit, and path traversal defense.
-- **Data Integrity**: CSV import preview with real-time PRN duplicate detection (both in-file and database conflicts clearly flagged, never silently merged).
-- **Tests**: Fully automated in-memory MongoDB test suite (8 test files, 170 automated tests) executing via Vitest.
-- **Code Quality**: Zero ESLint errors, zero TypeScript errors (`npm run build` and `npm run lint` passing).
+- **Batch Isolation**: All student lists, drives, imports, exports, and dashboard metrics strictly partition by `passoutYear` (batch) defaulting to `DEFAULT_PASSOUT_YEAR` (`2026`) so adjacent cohorts never mix.
+- **Pluggable Storage Adapter**: S3/R2-compatible storage with private bucket ACLs, 2MB PDF size limit, magic byte validation (`%PDF-`), serving safely with `X-Content-Type-Options: nosniff`. Production fail-safe disables uploads if `STORAGE_PROVIDER=local` in production or Vercel.
+- **Placement & Eligibility Engine**: Server-side academic eligibility evaluator with explicit `"not recorded"` reason for null fields, IST registration deadline enforcement, offer tier progression validation, and automatic offer reversal synchronization.
+- **Data Integrity**: Formula-safe CSV exports (escapes leading `=`, `+`, `-`, `@`, `\t`, `\r`), two-step shortlist workflow (`/preview` and `/confirm` with idempotency).
+- **Tests**: Fully automated in-memory MongoDB test suite (12 test files, 232 automated tests) executing via Vitest.
+- **Code Quality**: Zero ESLint errors, zero TypeScript errors (`npm run build` and `npm run lint` passing 100%).
 
 ---
 
@@ -279,12 +280,19 @@ npm test
 
 | Test File | Test Count | Scope Covered |
 | :--- | :--- | :--- |
-| `tests/route-authorization.test.ts` | 66 tests | Real route handlers, role-based scope isolation, cross-department boundary testing, cascading deletions, forced password change 403 enforcement, session invalidation on deactivation/reset, and student department single source of truth validation. |
+| `tests/route-authorization.test.ts` | 72 tests | Real route handlers, role-based scope isolation, cross-department boundary testing, cascading deletions, forced password change 403 enforcement, session invalidation on deactivation/reset, and student department single source of truth validation. |
+| `tests/authorization.test.ts` | 28 tests | Central RBAC policy matrix verification, default-deny enforcement, action and scope mapping across all roles. |
+| `tests/drives-authorization.test.ts` | 18 tests | Companies CRUD & delete protection, Drives CRUD & batch cohort scoping, Eligible roster calculation, Registration with late/override audit reason, Duplicate application race condition prevention. |
+| `tests/shortlist-and-offers.test.ts` | 15 tests | Two-step shortlist preview & confirm with idempotency, Offer issuance & policy tier check, Offer reversal & student status resynchronization, Formula-safe CSV export with formula injection escaping and DOB/gender exclusion, Offer letter PDF upload & download. |
+| `tests/storage.test.ts` | 13 tests | Pluggable `StorageAdapter` architecture (`LocalDiskStorageAdapter`, `S3CompatibleStorageAdapter`), random UUID keys, 2MB size limit, PDF magic bytes verification, nosniff headers, production fail-safe when `STORAGE_PROVIDER=local`. |
+| `tests/eligibilityEngine.test.ts` | 18 tests | Academic eligibility evaluator with explicit `"not recorded"` reason for null backlogs/cgpa/percentages, empty restriction handling, IST deadline validation, `evaluatePlacementPolicyCompliance` tier checks. |
+| `tests/models-validation.test.ts` | 11 tests | Zod nullable preprocessors (blank string/null/undefined -> null, "0" -> 0) across API, Form, and CSV import schemas; no default 0 on backlogs. |
 | `tests/user-management.test.ts` | 14 tests | Admin user provisioning, temporary password generation, password complexity checks, preventing reuse of current or temporary passwords, token version incrementation. |
 | `tests/rate-limit.test.ts` | 12 tests | Edge proxy IP extraction, campus NAT multi-user tolerance, credential stuffing spray protection (25+ accounts), zero-sleep progressive backoff timing ($<100\text{ms}$ execution), unidentified IP handling, and limit resets. |
-| `tests/authorization.test.ts` | 26 tests | Central RBAC policy matrix verification, default-deny enforcement, action and scope mapping across all roles. |
+| `tests/passoutYearMigration.test.ts` | 11 tests | Passout year migration script, batch isolation, dry-run vs apply modes. |
 | `tests/departmentMapper.test.ts` | 6 tests | Mapping variations (free-text variants, acronyms, case insensitivity), fallback behaviors, and enum schema validation. |
-| **Total** | **124 tests** | **All passing cleanly (0 failures, 0 warnings)** |
+| `tests/api-protection-scan.test.ts` | 15 tests | Route-guard automated scanner ensuring every API route enforces authentication and permission policy. |
+| **Total** | **232 tests** | **All 12 test files passing cleanly (0 failures, 0 warnings)** |
 
 ---
 
@@ -297,6 +305,46 @@ npm test
 | `MONGODB_URI` | Yes | MongoDB Atlas connection string (including database name) | `mongodb+srv://user:pass@cluster.mongodb.net/campusplace?retryWrites=true&w=majority` |
 | `NEXTAUTH_URL` | Yes | Canonical deployment URL | `https://campusplace.vercel.app` |
 | `NEXTAUTH_SECRET` | Yes | Cryptographic secret for signing session JWTs | `openssl rand -base64 32` |
+| `STORAGE_PROVIDER` | Production: `s3` | Storage engine (`local` for dev/test only; `s3` for production / preview). Production fails safe if set to `local`. | `s3` |
+| `S3_BUCKET_NAME` | When `s3` | Private bucket name for resumes and offer letters | `dypcet-campusplace-storage` |
+| `S3_REGION` | When `s3` | AWS / Cloudflare R2 / MinIO region | `ap-south-1` (AWS) or `auto` (R2) |
+| `S3_ACCESS_KEY_ID` | When `s3` | IAM Access Key ID scoped to PutObject, GetObject, DeleteObject | `AKIAIOSFODNN7EXAMPLE` |
+| `S3_SECRET_ACCESS_KEY` | When `s3` | IAM Secret Access Key | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
+| `S3_ENDPOINT` | Optional | Custom S3 endpoint (for Cloudflare R2, MinIO, or LocalStack) | `https://<account_id>.r2.cloudflarestorage.com` |
+
+### Cloud Storage Security & Production Setup (AWS S3 / Cloudflare R2)
+
+To ensure student privacy and institutional security:
+1. **Private Bucket**: Create an S3 or R2 bucket (e.g. `dypcet-campusplace-prod`). Ensure "Block all public access" is **Enabled**. Under no circumstances should the bucket have public read ACLs or public bucket policies.
+2. **Dedicated Buckets / Isolation**: Create separate buckets for Preview (`dypcet-campusplace-preview`) and Production (`dypcet-campusplace-prod`) environments. Configure environment variables in Vercel with appropriate environment scoping (`Preview` vs `Production`).
+3. **Least-Privilege Scoped IAM User**:
+   - Create an IAM User (e.g. `dypcet-campusplace-app`) with programmatic access only (access keys, no console access).
+   - Attach an inline policy strictly granting object-level permissions to the specific bucket ARN:
+     ```json
+     {
+       "Version": "2012-10-17",
+       "Statement": [
+         {
+           "Sid": "CampusPlaceBucketAccess",
+           "Effect": "Allow",
+           "Action": [
+             "s3:PutObject",
+             "s3:GetObject",
+             "s3:DeleteObject",
+             "s3:ListBucket"
+           ],
+           "Resource": [
+             "arn:aws:s3:::dypcet-campusplace-prod",
+             "arn:aws:s3:::dypcet-campusplace-prod/*"
+           ]
+         }
+       ]
+     }
+     ```
+4. **Vercel Ephemeral Disk Guard**:
+   - Vercel serverless functions have ephemeral filesystems. Local disk uploads will be lost on container recycling.
+   - The application enforces a hard fail-safe: if `STORAGE_PROVIDER=local` and `NODE_ENV=production` (or `VERCEL` is set), uploads return HTTP 500 with:
+     `"Local storage is not supported in production. Configure STORAGE_PROVIDER=s3 with valid cloud credentials."`
 
 ### Bootstrap Variables (One-Time Seeder Only — NEVER in Vercel Runtime)
 
@@ -353,22 +401,74 @@ npm test
 
 ---
 
-## 11. ROADMAP STATUS & REMAINING PHASES (PHASES 4 TO 8)
+## 11. ROADMAP STATUS & REMAINING PHASES (PHASES 5 TO 8)
 
-### Phase 3: Student Management & Cohort Roster [COMPLETED]
+### Phase 3a: Student Management & Core Cohort Engine [CORE DELIVERED]
 - **Batch Isolation**: Added `passoutYear` (cohort batch) to `Student` schema with index on `{ department: 1, passoutYear: 1 }` and `{ passoutYear: 1, placementStatus: 1 }`. Configured `currentAcademicYear` (`2025-2026`) and `defaultPassoutYear` (`2026`) in `collegeConfig.ts`. All student queries, dashboard aggregations, imports, and exports filter strictly by batch.
 - **Strict Placement Status Governance**: Role-restricted to `TPO` and `SUPER_ADMIN`. De-listing a student from `Placed` status strictly requires a `statusChangeReason` and records an immutable audit log entry. `DEPT_COORDINATOR` and `STAFF` are prevented from altering placement status.
-- **Secure Resume Upload**: Upload endpoint `POST /api/students/[id]/resume` with magic byte validation (`%PDF-`), 5MB size limit, UUID-based file naming, path traversal defense, and automatic cleanup of previous resumes.
+- **Resume Upload & Pluggable Storage**: Migrated to pluggable `StorageAdapter` with UUID keys, 2MB size limit, magic byte validation (`%PDF-`), and serving safely with `X-Content-Type-Options: nosniff`.
 - **Bulk CSV Import with Duplicate PRN Detection**: `POST /api/students/import/preview` parses uploaded CSV and inspects for duplicates both within the uploaded file and against existing database records. `POST /api/students/import` validates strictly and inserts cohorts idempotently.
-- **CSV Cohort Export**: `GET /api/students/export` streams sanitized CSV data with batch, department, and placement status filtering.
-- **Upgraded Student Management UI**: Student directory (`/students`) with batch switcher, search/filtering, placement update modal with mandatory de-listing reason, CSV import preview drawer with duplicate warnings, and CSV export.
+- **CSV Cohort Export**: `GET /api/students/export` streams sanitized CSV data with batch, department, and placement status filtering. Formula-safe escaping prevents CSV injection.
+- **Student Management UI**: Student directory (`/students`) with batch switcher, search/filtering, placement update modal with mandatory de-listing reason, CSV import preview drawer with duplicate warnings, and CSV export.
 - **Idempotent Migration Script**: `scripts/migrate-passout-year.ts` with `--dry-run` and interactive `--apply` modes, complete with unit test coverage.
 
-### Phase 4: Training & Placement Drive Management [NEXT]
-- Company recruitment drive tracking (eligibility criteria, job description, CTC/stipend).
-- Eligibility calculation engine (filters students matching company CGPA and backlog criteria).
-- Multi-round tracking (Aptitude -> Technical Interview -> HR -> Offer Letter).
-- Schedule calendar view for ongoing training modules and campus visits.
+### Phase 3b: Student Profile Extensions & Gap Follow-Up Backlog [PENDING BACKLOG]
+> [!IMPORTANT]
+> **Phase 3 is NOT described as complete.** While Phase 3a established core cohort tracking, batch isolation, and CSV import/export, the following comprehensive student profile extensions from the original Phase 3 specification are tracked as the Phase 3b follow-up backlog:
+- **Phone Number Format & Emergency Contacts** (`Partial` in [src/models/Student.ts](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/models/Student.ts)): Basic optional phone string exists; E.164 phone regex validation, parent/guardian contact, and emergency contact details are deferred to Phase 3b.
+- **Gender Field** (`Missing` from [src/models/Student.ts](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/models/Student.ts)): Not yet on student model. Company export presets strictly exclude gender until Phase 3b.
+- **Date of Birth (DOB)** (`Missing` from [src/models/Student.ts](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/models/Student.ts)): Not yet on student model. Company export presets strictly exclude DOB until Phase 3b.
+- **Division / Section Assignment** (`Missing` from [src/models/Student.ts](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/models/Student.ts)): Class division tagging (e.g. Division A, B) deferred to Phase 3b.
+- **Semester-Wise SGPA Breakdown** (`Missing` from [src/models/Student.ts](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/models/Student.ts)): Cumulative `cgpa` is implemented; detailed 8-semester SGPA array and credit tracking are deferred to Phase 3b.
+- **Historical Backlog Breakdown** (`Partial` in [src/models/Student.ts](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/models/Student.ts)): Active `backlogs` count is tracked; historical cleared backlog count and subject-wise backlog history are deferred to Phase 3b.
+- **Technical Skills Inventory** (`Missing` from [src/models/Student.ts](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/models/Student.ts)): Tagged student technical competencies (languages, frameworks, cloud tools) deferred to Phase 3b.
+- **Certifications & Credential Links** (`Missing` from [src/models/Student.ts](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/models/Student.ts)): Course certifications and external credential URLs deferred to Phase 3b.
+- **Academic & Industry Projects** (`Missing` from [src/models/Student.ts](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/models/Student.ts)): Capstone projects, title, description, and repository links deferred to Phase 3b.
+- **Prior Internships Experience** (`Missing` from [src/models/Student.ts](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/models/Student.ts)): Prior internship employer, role, duration, and stipend records deferred to Phase 3b.
+- **Professional Social Profiles** (`Missing` from [src/models/Student.ts](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/models/Student.ts)): GitHub, LinkedIn, and personal portfolio URLs deferred to Phase 3b.
+- **Student Profile Picture Upload** (`Missing` from [src/models/Student.ts](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/models/Student.ts)): Student photo upload, avatar thumbnailing, and cloud storage deferred to Phase 3b.
+- **Profile Completeness Meter** (`Missing` from [src/app/students/page.tsx](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/app/students/page.tsx)): Dynamic institutional profile completion percentage scoring (0–100%) deferred to Phase 3b.
+- **Tabbed Student Profile View** (`Missing` from [src/app/students/page.tsx](file:///Users/pratikravan/Desktop/Placement%20Coordination%20Dashboard/src/app/students/page.tsx)): Tabbed profile modal or dedicated page (Academics, Experience, Documents, History) deferred to Phase 3b.
+
+### Phase 4: Companies, Placement Drives, Eligibility Engine & Offer Workflow [COMPLETED]
+- **Pluggable Cloud Storage Adapter**:
+  - Implemented `StorageAdapter` interface with `LocalDiskStorageAdapter` (strictly for local dev/testing) and `S3CompatibleStorageAdapter` (AWS S3, Cloudflare R2, MinIO).
+  - Selected dynamically via `STORAGE_PROVIDER`.
+  - **Production Fail-Safe**: If `STORAGE_PROVIDER=local` in production or Vercel, file uploads are disabled with a clear message: `"Local storage is not supported in production. Configure STORAGE_PROVIDER=s3 with valid cloud credentials."`
+  - 2MB strict file size limit on resumes and offer letters (complying with Vercel serverless request body bounds).
+  - Magic-byte verification (`%PDF-`), serving strictly as `application/pdf` with `X-Content-Type-Options: nosniff` and safe `Content-Disposition`.
+  - Random UUID storage keys (never derived from student ID or timestamp, never exposed to clients).
+  - File deletion on replacement, and documented student deletion cleanup policy.
+- **Institutional Models & Validation**:
+  - `Company`: Sector, website, HR contacts (redacted for `DEPT_COORDINATOR`), notes, dynamic drive count, 409 deletion block if drives exist.
+  - `Drive`: Type (`Full-time`, `Internship`, `Internship+PPO`), CTC/stipend, IST deadline enforcement, rounds pipeline, 409 deletion block if applications exist. Dynamic "Registration Closed" badge based on current IST time.
+  - `Application`: Unique index on `{ drive: 1, student: 1 }` prevents concurrent double-registration. Current round index, round history, eligibility snapshot, and override audit trail (`overriddenBy`, `overrideReason`).
+  - `Offer`: Role, CTC, stipend, tier (`Regular`, `Dream`, `Super Dream`), source (`On-Campus Drive`, `Off-Campus / Self-Placed`, `Pool Campus`), status (`Offered`, `Accepted`, `Declined`, `Revoked`), offer letter upload, and audit history.
+  - `Student`: Added `tenthPercentage`, `twelfthOrDiplomaPercentage`, removed `default: 0` from `backlogs`. Zod preprocessors coerce blank string, `undefined`, or `null` to `null` before numeric parsing; `"0"` stays `0`.
+- **Eligibility & Placement Policy Engine**:
+  - `evaluateStudentEligibility()`: null CGPA, backlogs, or percentages yield explicit `"not recorded"` reason and ineligible status (never treated as 0 or passing). Empty allowed departments/batches mean "no restriction". Opted Out and Higher Studies students are ineligible.
+  - Server-side IST registration deadline check (`isDriveRegistrationOpen()`).
+  - `evaluatePlacementPolicyCompliance()`: enforces CTC tier progression rules and maximum accepted offer caps.
+- **Two-Step Shortlist Workflow**:
+  - `POST /api/drives/[id]/shortlist/preview`: previews matched, omitted, and unrecognized roll numbers without altering DB.
+  - `POST /api/drives/[id]/shortlist/confirm`: idempotently advances matched candidates to the target round; optionally marks omitted candidates as `Rejected` with mandatory audit reason.
+- **Offer Synchronization & Reversal Engine**:
+  - `POST /api/offers`: synchronizes accepted qualifying offers (`Full-time`, `PPO`) with `Student.placementStatus = 'Placed'` and caches company name and package.
+  - `PATCH /api/offers/[id]/reversal`: declining or revoking an offer re-evaluates all remaining offers for the student; if no other accepted offers remain, automatically reverts status to `'Not Placed'`.
+- **Formula-Safe CSV Exports**:
+  - `GET /api/drives/[id]/export`: escapes leading `=`, `+`, `-`, `@`, `\t`, `\r` with a single quote `'` to neutralize formula injection in Microsoft Excel / Google Sheets. Preset `company` strictly excludes DOB and gender until Phase 3b.
+- **Server-Side Dashboard Package Analytics**:
+  - `GET /api/dashboard-stats`: highest, average, and median package LPA computed server-side from distinct highest accepted qualifying offers.
+  - Placement percentage formula: `(placedStudents / eligibleOptedInStudents) * 100`.
+- **Audit & Migration Scripts**:
+  - `scripts/report-incomplete-students.ts`: flags missing academic criteria and detects `backlogs === 0` with unrecorded CGPA as possible default-0 artifacts.
+  - `scripts/backfill-manual-offers.ts`: dry-run by default; `--apply` prints target DB host/name and requires typing the DB name to confirm; lists all conversion assumptions.
+- **Full UI Integration**:
+  - Companies Directory (`/companies`) with create/edit modal and HR contact management.
+  - Placement Drives Directory (`/drives`) with batch switcher, status filter, and creation modal.
+  - Drive Detail & Pipeline Dashboard (`/drives/[id]`) with Overview, Eligibility Roster, Applicant Pipeline with Shortlist Modal, and Drive Offers.
+  - Institutional Offers Directory (`/offers`) with manual off-campus offer creation, offer letter PDF upload, and offer reversal modal.
+  - Sidebar updated with direct navigation links.
 
 ### Phase 5: Attendance & Real-Time Tracking
 - QR-code generated attendance check-in for physical training sessions.
