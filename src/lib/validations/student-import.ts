@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   VALID_PASSOUT_YEARS,
   PLACEMENT_STATUSES,
-  PlacementStatus,
 } from '@/config/collegeConfig';
 
 export const normalizeHeader = (header: string): string => {
@@ -44,7 +43,7 @@ export const importStudentRowSchema = z.object({
       message: `Passout year must be between ${VALID_PASSOUT_YEARS[0]} and ${VALID_PASSOUT_YEARS[VALID_PASSOUT_YEARS.length - 1]}`,
     }),
   placementStatus: z
-    .enum(PLACEMENT_STATUSES as [PlacementStatus, ...PlacementStatus[]])
+    .enum(PLACEMENT_STATUSES)
     .default('Not Placed'),
   cgpa: z.number().min(0).max(10).optional(),
   backlogs: z.number().int().min(0).default(0),

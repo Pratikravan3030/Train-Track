@@ -19,7 +19,7 @@ export async function POST(request: Request) {
 
   try {
     let csvContent = '';
-    let targetBatch = DEFAULT_PASSOUT_YEAR;
+    let targetBatch: number = DEFAULT_PASSOUT_YEAR;
 
     const contentType = request.headers.get('content-type') || '';
     if (contentType.includes('multipart/form-data')) {

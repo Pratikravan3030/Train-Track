@@ -14,7 +14,12 @@ import {
   Clock
 } from 'lucide-react';
 import Link from 'next/link';
-import { COLLEGE_CONFIG } from '@/config/collegeConfig';
+import {
+  COLLEGE_CONFIG,
+  VALID_PASSOUT_YEARS,
+  DEFAULT_PASSOUT_YEAR,
+  CURRENT_ACADEMIC_YEAR,
+} from '@/config/collegeConfig';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -45,6 +50,12 @@ interface YearData {
 
 interface StatsData {
   totalStudents: number;
+  placedStudents?: number;
+  placementRate?: number;
+  placementDistribution?: { status: string; count: number }[];
+  avgPackageLPA?: number;
+  highestPackageLPA?: number;
+  selectedBatch?: number | string;
   totalSessions: number;
   totalAttendanceRecords: number;
   overallAttendanceRate: number;
@@ -59,15 +70,14 @@ interface StatsData {
 }
 
 export default function Dashboard() {
+  const [selectedBatch, setSelectedBatch] = useState<number>(DEFAULT_PASSOUT_YEAR);
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const loadStats = useCallback(async () => {
+  const loadStats = useCallback(async (batchToLoad: number) => {
     try {
-      setLoading(true);
-      setError('');
-      const res = await fetch('/api/dashboard-stats');
+      const res = await fetch(`/api/dashboard-stats?batch=${batchToLoad}`);
 
       if (!res.ok) {
         if (res.status === 401) {
@@ -82,7 +92,7 @@ export default function Dashboard() {
         const serverError = errData?.error ? `: ${errData.error}` : '';
         throw new Error(
           res.status >= 500
-            ? `Server error (${res.status})${serverError}. Please check MongoDB Atlas connection.`
+            ? `Server error (${res.status})${serverError}. Please check database connection.`
             : `Failed to load dashboard metrics (Status ${res.status})`
         );
       }
@@ -103,7 +113,7 @@ export default function Dashboard() {
     let ignore = false;
     async function init() {
       try {
-        const res = await fetch('/api/dashboard-stats');
+        const res = await fetch(`/api/dashboard-stats?batch=${selectedBatch}`);
         if (!res.ok) {
           if (res.status === 401) {
             if (!ignore) setError('Session expired. Redirecting to login...');
@@ -134,14 +144,16 @@ export default function Dashboard() {
         if (!ignore) setLoading(false);
       }
     }
+
     init();
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [selectedBatch]);
 
   const handleRetry = () => {
-    loadStats();
+    setLoading(true);
+    loadStats(selectedBatch);
   };
 
   if (loading) {
@@ -202,6 +214,9 @@ export default function Dashboard() {
             <Badge variant="warning" size="sm" className="bg-amber-400/20 text-amber-300 border-amber-300/30">
               {COLLEGE_CONFIG.institution.shortName}
             </Badge>
+            <Badge variant="info" size="sm" className="bg-blue-400/20 text-blue-200 border-blue-300/30">
+              AY {CURRENT_ACADEMIC_YEAR}
+            </Badge>
             <span className="text-xs text-blue-200 font-medium">Kasaba Bawada, Kolhapur</span>
           </div>
           <h2 className="text-lg sm:text-xl font-black tracking-tight text-white">
@@ -213,6 +228,21 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20 flex items-center gap-2">
+            <span className="text-[11px] font-bold text-blue-200">Batch:</span>
+            <select
+              aria-label="Filter Dashboard by Batch"
+              value={selectedBatch}
+              onChange={(e) => setSelectedBatch(Number(e.target.value))}
+              className="bg-white text-slate-900 text-xs font-bold rounded-lg px-2 py-1 focus:outline-hidden cursor-pointer"
+            >
+              {VALID_PASSOUT_YEARS.map((y) => (
+                <option key={y} value={y}>
+                  {y} {y === DEFAULT_PASSOUT_YEAR ? '(Current)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <Link href="/students">
             <Button variant="primary" size="sm" className="bg-blue-600 hover:bg-blue-500 text-white">
               <Plus className="h-3.5 w-3.5 mr-1" />
@@ -311,27 +341,74 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Placement Drives & Package KPIs Clean Empty State (Phase 4 Ready) */}
-      <div className="p-6 bg-white rounded-3xl border border-slate-100 shadow-xs space-y-3">
+      {/* Placement Drives & Package KPIs */}
+      <div className="p-6 bg-white rounded-3xl border border-slate-100 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
             <Award className="h-5 w-5 text-blue-600" />
-            <h3 className="text-sm font-bold text-slate-800">Placement Drives & Offer Analytics</h3>
+            <h3 className="text-sm font-bold text-slate-800">
+              Placement Analytics (Batch {stats?.selectedBatch || selectedBatch})
+            </h3>
           </div>
-          <Badge variant="neutral" size="sm">
-            Phase 4 Placement Engine
-          </Badge>
+          <Link href="/students">
+            <Badge variant="info" size="sm" className="cursor-pointer hover:bg-blue-100">
+              Manage Placements &rarr;
+            </Badge>
+          </Link>
         </div>
 
-        <div className="py-6 px-4 rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 text-center flex flex-col items-center justify-center">
-          <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2.5">
-            <Award className="h-5 w-5" />
+        {stats?.placedStudents && stats.placedStudents > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 bg-emerald-50/60 border border-emerald-100 rounded-2xl">
+              <div className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Placed Students</div>
+              <div className="mt-1 text-2xl font-black text-emerald-950">
+                {stats.placedStudents} <span className="text-xs font-semibold text-emerald-600">/ {totalStudents}</span>
+              </div>
+              <p className="text-[11px] text-emerald-700 mt-0.5">Successful campus offers</p>
+            </div>
+
+            <div className="p-4 bg-blue-50/60 border border-blue-100 rounded-2xl">
+              <div className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">Placement Rate</div>
+              <div className="mt-1 text-2xl font-black text-blue-950">
+                {stats.placementRate}%
+              </div>
+              <p className="text-[11px] text-blue-700 mt-0.5">Cohort placement percentage</p>
+            </div>
+
+            <div className="p-4 bg-indigo-50/60 border border-indigo-100 rounded-2xl">
+              <div className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Average CTC</div>
+              <div className="mt-1 text-2xl font-black text-indigo-950">
+                {stats.avgPackageLPA ? `${stats.avgPackageLPA} LPA` : '—'}
+              </div>
+              <p className="text-[11px] text-indigo-700 mt-0.5">Average salary package</p>
+            </div>
+
+            <div className="p-4 bg-purple-50/60 border border-purple-100 rounded-2xl">
+              <div className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">Highest Package</div>
+              <div className="mt-1 text-2xl font-black text-purple-950">
+                {stats.highestPackageLPA ? `${stats.highestPackageLPA} LPA` : '—'}
+              </div>
+              <p className="text-[11px] text-purple-700 mt-0.5">Peak compensation offer</p>
+            </div>
           </div>
-          <p className="text-xs font-bold text-slate-800">No active placement drives or offer letters recorded yet</p>
-          <p className="text-[11px] text-slate-500 max-w-md mt-1 leading-relaxed">
-            Eligible student shortlisting, recruiter job descriptions, CTC packages, and offer tracking will be initialized in Phase 4 when the placement workflow engine is activated.
-          </p>
-        </div>
+        ) : (
+          <div className="py-6 px-4 rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 text-center flex flex-col items-center justify-center">
+            <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2.5">
+              <Award className="h-5 w-5" />
+            </div>
+            <p className="text-xs font-bold text-slate-800">
+              No students marked as placed yet for Batch {stats?.selectedBatch || selectedBatch}
+            </p>
+            <p className="text-[11px] text-slate-500 max-w-md mt-1 leading-relaxed">
+              TPO and Administrators can update student placement offers, record CTC packages, and manage status transitions in the Student Directory.
+            </p>
+            <Link href="/students" className="mt-3">
+              <Button variant="outline" size="sm" className="text-xs">
+                Open Student Directory
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Analytics Charts Row */}

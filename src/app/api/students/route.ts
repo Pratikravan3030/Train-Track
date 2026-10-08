@@ -66,7 +66,7 @@ export async function GET(request: Request) {
       andConditions.push({ year });
     }
 
-    if (placementStatus && placementStatus !== 'all') {
+    if (placementStatus) {
       andConditions.push({ placementStatus });
     }
 
