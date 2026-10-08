@@ -25,6 +25,7 @@ export interface IStudent extends Document {
   cgpa?: number;
   backlogs?: number;
   resumeUrl?: string;
+  resumeFilename?: string;
   email?: string;
   phone?: string;
   createdAt: Date;
@@ -75,6 +76,7 @@ const StudentSchema: Schema = new Schema({
   cgpa: { type: Number, min: 0, max: 10 },
   backlogs: { type: Number, min: 0, default: 0 },
   resumeUrl: { type: String, trim: true },
+  resumeFilename: { type: String, trim: true },
   email: { type: String, trim: true, lowercase: true },
   phone: { type: String, trim: true },
   createdAt: { type: Date, default: Date.now },
