@@ -25,11 +25,14 @@ Prior to CampusPlace, placement officers, department faculty coordinators, and t
 - **Institution Analytics**: Server-side MongoDB aggregations for real-time placement statistics, attendance rates, and rating distributions.
 - **Administrative User Lifecycle**: Self-service user provisioning, temporary password issuance, forced first-login password changes, instant session revocation, and audit logging.
 
-### Current Maturity Level: Production-Ready Foundation (Phases 1 & 2 Completed)
-- **Status**: Production-ready core backend and frontend foundation.
-- **Security & Authorization**: Default-deny central RBAC policy across all API routes, token-version session invalidation, server-side forced password change enforcement, and campus-NAT-tolerant anti-DOS rate limiting.
-- **Tests**: Fully automated in-memory MongoDB test suite (5 test files, 124+ automated tests) executing via Vitest.
-- **Code Quality**: Zero ESLint errors, zero TypeScript errors (`npm run build` passing).
+### Current Maturity Level: Production-Ready Student Management & Cohort Engine (Phases 1, 2, & 3 Completed)
+- **Status**: Production-ready core backend, UI, and student cohort management engine.
+- **Security & Authorization**: Default-deny central RBAC policy across all API routes, token-version session invalidation, server-side forced password change enforcement, and campus-NAT-tolerant anti-DOS rate limiting. Strict placement status governance (TPO/Admin only with mandatory reason when de-listing from Placed status).
+- **Batch Isolation**: All student lists, imports, exports, and dashboard metrics strictly partition by `passoutYear` (batch) defaulting to `DEFAULT_PASSOUT_YEAR` (`2026`) so adjacent cohorts never mix.
+- **Resume Storage**: Secure PDF resume upload handler (`/api/students/[id]/resume`) with magic-byte verification, 5MB limit, and path traversal defense.
+- **Data Integrity**: CSV import preview with real-time PRN duplicate detection (both in-file and database conflicts clearly flagged, never silently merged).
+- **Tests**: Fully automated in-memory MongoDB test suite (8 test files, 170 automated tests) executing via Vitest.
+- **Code Quality**: Zero ESLint errors, zero TypeScript errors (`npm run build` and `npm run lint` passing).
 
 ---
 
@@ -315,7 +318,7 @@ npm test
    - Create database user with read/write access to `campusplace`.
 2. **Configure Vercel Environment**:
    - Set `MONGODB_URI`, `NEXTAUTH_URL`, and `NEXTAUTH_SECRET`.
-3. **Database Pre-Migration Safety Check**:
+3. **Database Pre-Migration Safety Checks**:
    - Run dry-run to inspect department mapping:
      ```bash
      npm run migrate:departments:dry-run
@@ -323,6 +326,14 @@ npm test
    - Run interactive migration (confirms DB name and prompts operator):
      ```bash
      npm run migrate:departments
+     ```
+   - Run dry-run to inspect passout year backfill:
+     ```bash
+     npm run migrate:passout-year:dry-run
+     ```
+   - Run interactive passout year backfill:
+     ```bash
+     npm run migrate:passout-year
      ```
 4. **Seed Initial Super Administrator**:
    - In local terminal, export seed variables:
@@ -342,15 +353,18 @@ npm test
 
 ---
 
-## 11. REMAINING ROADMAP (PHASES 3 TO 8)
+## 11. ROADMAP STATUS & REMAINING PHASES (PHASES 4 TO 8)
 
-### Phase 3: Student Management & Cohort Roster
-- Bulk CSV/Excel student roster import with validation preview.
-- Export student rosters by department, year, and placement eligibility status.
-- Student profile schema enhancements (CGPA, active backlogs, 10th/12th percentages, resume link).
-- Advanced search & multi-column sorting in student table.
+### Phase 3: Student Management & Cohort Roster [COMPLETED]
+- **Batch Isolation**: Added `passoutYear` (cohort batch) to `Student` schema with index on `{ department: 1, passoutYear: 1 }` and `{ passoutYear: 1, placementStatus: 1 }`. Configured `currentAcademicYear` (`2025-2026`) and `defaultPassoutYear` (`2026`) in `collegeConfig.ts`. All student queries, dashboard aggregations, imports, and exports filter strictly by batch.
+- **Strict Placement Status Governance**: Role-restricted to `TPO` and `SUPER_ADMIN`. De-listing a student from `Placed` status strictly requires a `statusChangeReason` and records an immutable audit log entry. `DEPT_COORDINATOR` and `STAFF` are prevented from altering placement status.
+- **Secure Resume Upload**: Upload endpoint `POST /api/students/[id]/resume` with magic byte validation (`%PDF-`), 5MB size limit, UUID-based file naming, path traversal defense, and automatic cleanup of previous resumes.
+- **Bulk CSV Import with Duplicate PRN Detection**: `POST /api/students/import/preview` parses uploaded CSV and inspects for duplicates both within the uploaded file and against existing database records. `POST /api/students/import` validates strictly and inserts cohorts idempotently.
+- **CSV Cohort Export**: `GET /api/students/export` streams sanitized CSV data with batch, department, and placement status filtering.
+- **Upgraded Student Management UI**: Student directory (`/students`) with batch switcher, search/filtering, placement update modal with mandatory de-listing reason, CSV import preview drawer with duplicate warnings, and CSV export.
+- **Idempotent Migration Script**: `scripts/migrate-passout-year.ts` with `--dry-run` and interactive `--apply` modes, complete with unit test coverage.
 
-### Phase 4: Training & Placement Drive Management
+### Phase 4: Training & Placement Drive Management [NEXT]
 - Company recruitment drive tracking (eligibility criteria, job description, CTC/stipend).
 - Eligibility calculation engine (filters students matching company CGPA and backlog criteria).
 - Multi-round tracking (Aptitude -> Technical Interview -> HR -> Offer Letter).
