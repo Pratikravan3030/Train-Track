@@ -21,3 +21,29 @@ export interface PaginatedResult<T> {
     hasPrev: boolean;
   };
 }
+
+/**
+ * Safely converts empty strings, whitespace, undefined, or null to null BEFORE validation.
+ * "0" and 0 strictly stay 0.
+ */
+export const nullableNumberPreprocessor = (val: unknown): number | null | undefined => {
+  if (val === undefined) {
+    return undefined;
+  }
+  if (val === '' || val === null) {
+    return null;
+  }
+  if (typeof val === 'number') {
+    return Number.isNaN(val) ? null : val;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed === '') return null;
+    const num = Number(trimmed);
+    return Number.isNaN(num) ? NaN : num;
+  }
+  return NaN;
+};
+
+export const nullableNumber = (numberSchema: z.ZodNumber) =>
+  z.preprocess((val) => (val === undefined ? null : nullableNumberPreprocessor(val)), numberSchema.nullable());

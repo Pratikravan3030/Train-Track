@@ -3,6 +3,7 @@ import {
   VALID_PASSOUT_YEARS,
   PLACEMENT_STATUSES,
 } from '@/config/collegeConfig';
+import { nullableNumber, nullableNumberPreprocessor } from './common';
 
 export const normalizeHeader = (header: string): string => {
   const clean = header.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -17,6 +18,32 @@ export const normalizeHeader = (header: string): string => {
     return 'phone';
   if (clean === 'cgpa' || clean === 'gpa') return 'cgpa';
   if (clean === 'backlogs' || clean === 'activebacklogs' || clean === 'kt') return 'backlogs';
+  if (
+    clean === '10th' ||
+    clean === '10thpercentage' ||
+    clean === 'tenth' ||
+    clean === 'tenthpercentage' ||
+    clean === 'tenthpercent' ||
+    clean === 'ssc' ||
+    clean === 'sscpercentage'
+  ) {
+    return 'tenthPercentage';
+  }
+  if (
+    clean === '12th' ||
+    clean === '12thpercentage' ||
+    clean === 'twelfth' ||
+    clean === 'twelfthpercentage' ||
+    clean === 'twelfthpercent' ||
+    clean === 'hsc' ||
+    clean === 'hscpercentage' ||
+    clean === 'diploma' ||
+    clean === 'diplomapercentage' ||
+    clean === 'twelfthordiplomapercentage' ||
+    clean === '12thordiploma'
+  ) {
+    return 'twelfthOrDiplomaPercentage';
+  }
   if (clean === 'placementstatus' || clean === 'status') return 'placementStatus';
   return header;
 };
@@ -36,17 +63,22 @@ export const importStudentRowSchema = z.object({
   rollNumber: z.string().min(1, 'PRN / Roll Number is required').toUpperCase(),
   department: z.string().min(1, 'Department / Branch is required'),
   year: z.string().default('Final Year'),
-  passoutYear: z
-    .number()
-    .int()
-    .refine((y) => VALID_PASSOUT_YEARS.includes(y as (typeof VALID_PASSOUT_YEARS)[number]), {
-      message: `Passout year must be between ${VALID_PASSOUT_YEARS[0]} and ${VALID_PASSOUT_YEARS[VALID_PASSOUT_YEARS.length - 1]}`,
-    }),
-  placementStatus: z
-    .enum(PLACEMENT_STATUSES)
-    .default('Not Placed'),
-  cgpa: z.number().min(0).max(10).optional(),
-  backlogs: z.number().int().min(0).default(0),
+  passoutYear: z.preprocess(
+    nullableNumberPreprocessor,
+    z
+      .number()
+      .int()
+      .refine((y) => VALID_PASSOUT_YEARS.includes(y as (typeof VALID_PASSOUT_YEARS)[number]), {
+        message: `Passout year must be between ${VALID_PASSOUT_YEARS[0]} and ${
+          VALID_PASSOUT_YEARS[VALID_PASSOUT_YEARS.length - 1]
+        }`,
+      })
+  ),
+  placementStatus: z.enum(PLACEMENT_STATUSES).default('Not Placed'),
+  cgpa: nullableNumber(z.number().min(0).max(10)).optional(),
+  backlogs: nullableNumber(z.number().int().min(0)).optional(),
+  tenthPercentage: nullableNumber(z.number().min(0).max(100)).optional(),
+  twelfthOrDiplomaPercentage: nullableNumber(z.number().min(0).max(100)).optional(),
   email: z.string().email('Valid email is required').toLowerCase().optional(),
   phone: z.string().max(20).optional(),
 });

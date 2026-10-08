@@ -71,6 +71,8 @@ export async function GET(request: Request) {
       { key: 'packageLPA', label: 'Package (LPA)' },
       { key: 'cgpa', label: 'CGPA' },
       { key: 'backlogs', label: 'Active Backlogs' },
+      { key: 'tenthPercentage', label: '10th Percentage' },
+      { key: 'twelfthOrDiplomaPercentage', label: '12th/Diploma Percentage' },
       { key: 'email', label: 'Email' },
       { key: 'phone', label: 'Phone' },
     ];
@@ -84,8 +86,10 @@ export async function GET(request: Request) {
       placementStatus: s.placementStatus || 'Not Placed',
       companyName: s.placementDetails?.companyName || '',
       packageLPA: s.placementDetails?.packageLPA ?? '',
-      cgpa: s.cgpa ?? '',
-      backlogs: s.backlogs ?? 0,
+      cgpa: s.cgpa != null ? s.cgpa : '',
+      backlogs: s.backlogs != null ? s.backlogs : '',
+      tenthPercentage: s.tenthPercentage != null ? s.tenthPercentage : '',
+      twelfthOrDiplomaPercentage: s.twelfthOrDiplomaPercentage != null ? s.twelfthOrDiplomaPercentage : '',
       email: s.email || '',
       phone: s.phone || '',
     }));

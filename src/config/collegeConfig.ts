@@ -107,3 +107,94 @@ export const PLACEMENT_STATUSES = [
   'Entrepreneurship',
 ] as const;
 export type PlacementStatus = (typeof PLACEMENT_STATUSES)[number];
+
+export const DRIVE_TYPES = ['Full-time', 'Internship', 'Internship+PPO'] as const;
+export type DriveType = (typeof DRIVE_TYPES)[number];
+
+export const DRIVE_MODES = ['On-Campus', 'Off-Campus', 'Virtual', 'Hybrid'] as const;
+export type DriveMode = (typeof DRIVE_MODES)[number];
+
+export const DRIVE_STATUSES = [
+  'Draft',
+  'Open',
+  'Registration Closed',
+  'In Progress',
+  'Completed',
+  'Archived',
+] as const;
+export type DriveStatus = (typeof DRIVE_STATUSES)[number];
+
+export const OFFER_TYPES = ['Full-time', 'Internship', 'PPO'] as const;
+export type OfferType = (typeof OFFER_TYPES)[number];
+
+export const OFFER_SOURCES = ['Campus Drive', 'Off-Campus / Manual'] as const;
+export type OfferSource = (typeof OFFER_SOURCES)[number];
+
+export const OFFER_STATUSES = ['Pending', 'Accepted', 'Declined', 'Revoked'] as const;
+export type OfferStatus = (typeof OFFER_STATUSES)[number];
+
+export const APPLICATION_STATUSES = [
+  'Applied',
+  'Shortlisted',
+  'In Round',
+  'Selected',
+  'Rejected',
+  'Withdrawn',
+] as const;
+export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+
+export const OFFER_TIER_NAMES = ['Regular', 'Dream', 'Super Dream'] as const;
+export type OfferTierName = (typeof OFFER_TIER_NAMES)[number];
+
+export interface PlacementTierConfig {
+  name: OfferTierName;
+  minCtcLpa: number;
+  maxCtcLpa: number | null; // null represents no upper bound
+  label: string;
+}
+
+export const PLACEMENT_POLICY_CONFIG = {
+  /* UNVERIFIED: CTC tiers to be confirmed by DYPCET T&P Cell */
+  tiers: [
+    { name: 'Regular', minCtcLpa: 0, maxCtcLpa: 5.0, label: 'Regular (< 5 LPA)' },
+    { name: 'Dream', minCtcLpa: 5.0, maxCtcLpa: 10.0, label: 'Dream (5.0 - 10.0 LPA)' },
+    { name: 'Super Dream', minCtcLpa: 10.0, maxCtcLpa: null, label: 'Super Dream (10.0+ LPA)' },
+  ] as const satisfies readonly PlacementTierConfig[],
+
+  /* UNVERIFIED: Placement eligibility and re-application rules */
+  rules: {
+    oneOfferPolicy: true, // Placed students can only apply for strictly higher tiers
+    tierUpgradeOnly: true,
+    maxOffersPerStudent: 2,
+    /* Open question for college: Do Pending offers count as active offers that restrict reapplying? */
+    pendingOffersCountAsActive: false,
+    /* Types of offers counted toward institutional placement percentage and package stats */
+    placementStatOfferTypes: ['Full-time', 'PPO'] as const,
+  },
+
+  /* Denominator configuration for placement rate calculations */
+  placementPercentageCalculation: {
+    /* Configurable basis: 'eligibleOptedIn' | 'registered' | 'totalCohort' */
+    denominatorBasis: 'eligibleOptedIn' as 'eligibleOptedIn' | 'registered' | 'totalCohort',
+    formulaDisplay:
+      'Placement Rate (%) = (Placed Students with Full-time/PPO / Placement-Eligible & Opted-In Students) × 100',
+  },
+} as const;
+
+/**
+ * Computes placement tier from CTC LPA using half-open ranges [min, max).
+ * Boundary 5.0 => Dream; Boundary 10.0 => Super Dream.
+ */
+export function resolveOfferTier(ctcLpa?: number | null): OfferTierName {
+  if (ctcLpa == null || ctcLpa < 0) return 'Regular';
+
+  for (const tier of PLACEMENT_POLICY_CONFIG.tiers) {
+    const aboveMin = ctcLpa >= tier.minCtcLpa;
+    const belowMax = tier.maxCtcLpa === null ? true : ctcLpa < tier.maxCtcLpa;
+    if (aboveMin && belowMax) {
+      return tier.name;
+    }
+  }
+
+  return 'Regular';
+}

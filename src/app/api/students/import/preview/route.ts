@@ -94,7 +94,22 @@ export async function POST(request: Request) {
       if (normalizedRow.backlogs !== undefined && normalizedRow.backlogs !== '') {
         normalizedRow.backlogs = Number(normalizedRow.backlogs);
       } else {
-        normalizedRow.backlogs = 0;
+        delete normalizedRow.backlogs;
+      }
+
+      if (normalizedRow.tenthPercentage !== undefined && normalizedRow.tenthPercentage !== '') {
+        normalizedRow.tenthPercentage = Number(normalizedRow.tenthPercentage);
+      } else {
+        delete normalizedRow.tenthPercentage;
+      }
+
+      if (
+        normalizedRow.twelfthOrDiplomaPercentage !== undefined &&
+        normalizedRow.twelfthOrDiplomaPercentage !== ''
+      ) {
+        normalizedRow.twelfthOrDiplomaPercentage = Number(normalizedRow.twelfthOrDiplomaPercentage);
+      } else {
+        delete normalizedRow.twelfthOrDiplomaPercentage;
       }
 
       if (normalizedRow.email === '') delete normalizedRow.email;

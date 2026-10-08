@@ -107,8 +107,10 @@ export async function POST(request: Request) {
         year: validData.year,
         passoutYear: validData.passoutYear || batch,
         placementStatus,
-        cgpa: validData.cgpa,
-        backlogs: validData.backlogs ?? 0,
+        cgpa: validData.cgpa ?? null,
+        backlogs: validData.backlogs ?? null,
+        tenthPercentage: validData.tenthPercentage ?? null,
+        twelfthOrDiplomaPercentage: validData.twelfthOrDiplomaPercentage ?? null,
         email: validData.email ? validData.email.trim().toLowerCase() : undefined,
         phone: validData.phone ? validData.phone.trim() : undefined,
       });

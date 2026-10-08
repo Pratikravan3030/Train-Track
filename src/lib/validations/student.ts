@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { paginationQuerySchema } from './common';
+import { paginationQuerySchema, nullableNumber, nullableNumberPreprocessor } from './common';
 import {
   PLACEMENT_STATUSES,
   DEFAULT_PASSOUT_YEAR,
@@ -19,16 +19,24 @@ export const createStudentSchema = z
     department: z.string().trim().optional(),
     branch: z.string().trim().optional(),
     year: z.string().trim().min(1, 'Academic year is required').max(50),
-    passoutYear: z.coerce
-      .number()
-      .int('Passout year must be an integer')
-      .min(2000, 'Passout year must be 2000 or later')
-      .max(2100, 'Passout year is out of valid range')
-      .default(DEFAULT_PASSOUT_YEAR),
+    passoutYear: z.preprocess(
+      (val) =>
+        val === '' || val === null || val === undefined
+          ? DEFAULT_PASSOUT_YEAR
+          : nullableNumberPreprocessor(val),
+      z
+        .number()
+        .int('Passout year must be an integer')
+        .min(2000, 'Passout year must be 2000 or later')
+        .max(2100, 'Passout year is out of valid range')
+        .default(DEFAULT_PASSOUT_YEAR)
+    ),
     placementStatus: z.enum(PLACEMENT_STATUSES).optional().default('Not Placed'),
     placementDetails: placementDetailsSchema.optional(),
-    cgpa: z.coerce.number().min(0).max(10).optional(),
-    backlogs: z.coerce.number().int().min(0).optional().default(0),
+    cgpa: nullableNumber(z.number().min(0).max(10)).optional(),
+    backlogs: nullableNumber(z.number().int().min(0)).optional(),
+    tenthPercentage: nullableNumber(z.number().min(0).max(100)).optional(),
+    twelfthOrDiplomaPercentage: nullableNumber(z.number().min(0).max(100)).optional(),
     resumeUrl: z.string().trim().optional(),
     email: z.string().trim().email('Invalid email address').toLowerCase(),
     phone: z.string().trim().optional(),
@@ -47,12 +55,17 @@ export const updateStudentSchema = z.object({
   department: z.string().trim().optional(),
   branch: z.string().trim().optional(),
   year: z.string().trim().min(1).max(50).optional(),
-  passoutYear: z.coerce.number().int().min(2000).max(2100).optional(),
+  passoutYear: z.preprocess(
+    nullableNumberPreprocessor,
+    z.number().int().min(2000).max(2100).optional().nullable()
+  ),
   placementStatus: z.enum(PLACEMENT_STATUSES).optional(),
   placementDetails: placementDetailsSchema.optional(),
   statusChangeReason: z.string().trim().min(1).max(500).optional(), // Required when de-listing from 'Placed'
-  cgpa: z.coerce.number().min(0).max(10).optional(),
-  backlogs: z.coerce.number().int().min(0).optional(),
+  cgpa: nullableNumber(z.number().min(0).max(10)).optional(),
+  backlogs: nullableNumber(z.number().int().min(0)).optional(),
+  tenthPercentage: nullableNumber(z.number().min(0).max(100)).optional(),
+  twelfthOrDiplomaPercentage: nullableNumber(z.number().min(0).max(100)).optional(),
   resumeUrl: z.string().trim().optional(),
   email: z.string().trim().email().toLowerCase().optional(),
   phone: z.string().trim().optional(),

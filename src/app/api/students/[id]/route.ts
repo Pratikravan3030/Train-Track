@@ -93,6 +93,8 @@ export async function PUT(
       statusChangeReason,
       cgpa,
       backlogs,
+      tenthPercentage,
+      twelfthOrDiplomaPercentage,
       resumeUrl,
       email,
       phone,
@@ -167,6 +169,9 @@ export async function PUT(
     if (phone !== undefined) updatePayload.phone = phone;
     if (cgpa !== undefined) updatePayload.cgpa = cgpa;
     if (backlogs !== undefined) updatePayload.backlogs = backlogs;
+    if (tenthPercentage !== undefined) updatePayload.tenthPercentage = tenthPercentage;
+    if (twelfthOrDiplomaPercentage !== undefined)
+      updatePayload.twelfthOrDiplomaPercentage = twelfthOrDiplomaPercentage;
     if (resumeUrl !== undefined) updatePayload.resumeUrl = resumeUrl;
     if (validatedDepartment !== undefined) {
       updatePayload.department = validatedDepartment;

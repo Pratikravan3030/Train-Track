@@ -22,8 +22,10 @@ export interface IStudent extends Document {
   passoutYear: number;        // Graduating batch (e.g., 2026) - Essential for batch isolation
   placementStatus: PlacementStatus;
   placementDetails?: IPlacementDetails;
-  cgpa?: number;
-  backlogs?: number;
+  cgpa?: number | null;
+  backlogs?: number | null;
+  tenthPercentage?: number | null;
+  twelfthOrDiplomaPercentage?: number | null;
   resumeUrl?: string;
   resumeFilename?: string;
   resumeStorageKey?: string;
@@ -74,8 +76,10 @@ const StudentSchema: Schema = new Schema({
     placedDate: { type: Date },
     reasonForStatusChange: { type: String, trim: true },
   },
-  cgpa: { type: Number, min: 0, max: 10 },
-  backlogs: { type: Number, min: 0, default: 0 },
+  cgpa: { type: Number, min: 0, max: 10, default: null },
+  backlogs: { type: Number, min: 0, default: null },
+  tenthPercentage: { type: Number, min: 0, max: 100, default: null },
+  twelfthOrDiplomaPercentage: { type: Number, min: 0, max: 100, default: null },
   resumeUrl: { type: String, trim: true },
   resumeFilename: { type: String, trim: true },
   resumeStorageKey: { type: String, trim: true },
