@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
 import dbConnect from '@/lib/db';
 import Student from '@/models/Student';
 import { requirePermission, canAccessDepartment } from '@/lib/auth-guards';
 import { logAudit } from '@/lib/audit';
 import {
-  saveResume,
-  getResumeFilePath,
-  deleteResumeFile,
-  MAX_RESUME_SIZE_BYTES,
+  getStorageAdapter,
   isValidPdf,
+  MAX_FILE_SIZE_BYTES,
 } from '@/lib/storage';
 
 export async function GET(
@@ -46,24 +43,54 @@ export async function GET(
       );
     }
 
-    if (!student.resumeFilename) {
+    const storageKey =
+      student.resumeStorageKey ||
+      (student.resumeFilename ? `resumes/${student.resumeFilename}` : null);
+
+    if (!storageKey) {
       return NextResponse.json({ error: 'Resume not found for this student' }, { status: 404 });
     }
 
-    const filePath = getResumeFilePath(student.resumeFilename);
-    if (!filePath) {
+    const adapter = getStorageAdapter();
+
+    // Check if client requested a signed URL
+    const url = new URL(request.url);
+    if (url.searchParams.get('signed') === 'true') {
+      const signedUrl = await adapter.getSignedDownloadUrl(storageKey, 300);
+      if (signedUrl) {
+        return NextResponse.redirect(signedUrl, { status: 307 });
+      }
+    }
+
+    const fileResult = await adapter.getFile(storageKey);
+    if (!fileResult) {
       return NextResponse.json(
         { error: 'Resume file is missing or has been removed from storage.' },
         { status: 404 }
       );
     }
 
-    const fileBuffer = await fs.promises.readFile(filePath);
+    let fileBuffer: Buffer;
+    if (fileResult.buffer) {
+      fileBuffer = fileResult.buffer;
+    } else if (fileResult.stream) {
+      const chunks: Buffer[] = [];
+      for await (const chunk of fileResult.stream) {
+        chunks.push(Buffer.from(chunk));
+      }
+      fileBuffer = Buffer.concat(chunks);
+    } else {
+      return NextResponse.json(
+        { error: 'Unable to read file content from storage provider.' },
+        { status: 500 }
+      );
+    }
 
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
+        'X-Content-Type-Options': 'nosniff',
         'Content-Disposition': `inline; filename="${student.rollNumber}-resume.pdf"`,
         'Cache-Control': 'private, no-cache, no-store, must-revalidate',
       },
@@ -116,9 +143,9 @@ export async function POST(
       return NextResponse.json({ error: 'No file provided in form data.' }, { status: 400 });
     }
 
-    if (file.size > MAX_RESUME_SIZE_BYTES) {
+    if (file.size > MAX_FILE_SIZE_BYTES) {
       return NextResponse.json(
-        { error: `File size exceeds 5MB limit (${(file.size / (1024 * 1024)).toFixed(2)} MB).` },
+        { error: `File size exceeds 2MB limit (${(file.size / (1024 * 1024)).toFixed(2)} MB).` },
         { status: 400 }
       );
     }
@@ -133,15 +160,26 @@ export async function POST(
       );
     }
 
+    const adapter = getStorageAdapter();
+
     // Delete old resume file if one exists
-    if (student.resumeFilename) {
-      await deleteResumeFile(student.resumeFilename);
+    const oldKey =
+      student.resumeStorageKey ||
+      (student.resumeFilename ? `resumes/${student.resumeFilename}` : null);
+    if (oldKey) {
+      await adapter.deleteFile(oldKey);
     }
 
-    const { filename, relativeUrl } = await saveResume(id, buffer);
+    const { key } = await adapter.saveFile({
+      folder: 'resumes',
+      buffer,
+      contentType: 'application/pdf',
+    });
 
+    const relativeUrl = `/api/students/${id}/resume`;
     student.resumeUrl = relativeUrl;
-    student.resumeFilename = filename;
+    student.resumeStorageKey = key;
+    student.resumeFilename = key.split('/').pop() || key;
     await student.save();
 
     await logAudit({
@@ -151,7 +189,7 @@ export async function POST(
       action: 'UPLOAD_RESUME',
       resource: 'Student',
       resourceId: id,
-      details: { rollNumber: student.rollNumber, filename },
+      details: { rollNumber: student.rollNumber, storageKey: key },
     });
 
     return NextResponse.json(
@@ -201,12 +239,18 @@ export async function DELETE(
       );
     }
 
-    if (student.resumeFilename) {
-      await deleteResumeFile(student.resumeFilename);
+    const storageKey =
+      student.resumeStorageKey ||
+      (student.resumeFilename ? `resumes/${student.resumeFilename}` : null);
+
+    if (storageKey) {
+      const adapter = getStorageAdapter();
+      await adapter.deleteFile(storageKey);
     }
 
     student.resumeUrl = undefined;
     student.resumeFilename = undefined;
+    student.resumeStorageKey = undefined;
     await student.save();
 
     await logAudit({

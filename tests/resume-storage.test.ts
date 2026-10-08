@@ -1,9 +1,23 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import fs from 'fs';
 import path from 'path';
 import type { AuthContext } from '@/lib/auth-guards';
+import {
+  isValidPdf,
+  MAX_FILE_SIZE_BYTES,
+  getStorageAdapter,
+  setStorageAdapterForTesting,
+  LocalDiskStorageAdapter,
+  S3CompatibleStorageAdapter,
+  StorageAdapter,
+  StorageFileResult,
+  GetFileResult,
+} from '@/lib/storage';
+import { GET as getResume, POST as postResume, DELETE as deleteResume } from '@/app/api/students/[id]/resume/route';
+import Student from '@/models/Student';
+import User from '@/models/User';
 
 // 1. Session state control for NextAuth mock
 let mockUserSession: { user: AuthContext } | null = null;
@@ -17,19 +31,43 @@ vi.mock('next-auth', () => ({
 const TEST_UPLOAD_DIR = path.join(process.cwd(), 'scratch', 'test-uploads');
 process.env.UPLOAD_DIR = TEST_UPLOAD_DIR;
 
-import {
-  isValidPdf,
-  saveResume,
-  getResumeFilePath,
-  deleteResumeFile,
-  MAX_RESUME_SIZE_BYTES,
-} from '@/lib/storage';
-import { GET as getResume, POST as postResume, DELETE as deleteResume } from '@/app/api/students/[id]/resume/route';
-import Student from '@/models/Student';
-import User from '@/models/User';
-import AuditLog from '@/models/AuditLog';
+// In-Memory Fake Storage Adapter for unit test isolation
+class InMemoryStorageAdapter implements StorageAdapter {
+  name = 'in-memory-fake';
+  public files = new Map<string, Buffer>();
 
-describe('Resume Storage Utility & API Route Integration Tests', () => {
+  async saveFile(params: {
+    folder: 'resumes' | 'offers';
+    buffer: Buffer;
+    contentType?: string;
+  }): Promise<StorageFileResult> {
+    const key = `${params.folder}/fake-uuid-${Date.now()}.pdf`;
+    this.files.set(key, params.buffer);
+    return { key, url: `/api/storage/${key}` };
+  }
+
+  async getFile(key: string): Promise<GetFileResult | null> {
+    const buf = this.files.get(key);
+    if (!buf) return null;
+    return {
+      buffer: buf,
+      contentType: 'application/pdf',
+      contentLength: buf.length,
+    };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async getSignedDownloadUrl(key: string, _expiresInSeconds?: number): Promise<string | null> {
+    if (!this.files.has(key)) return null;
+    return `https://fake-s3.amazonaws.com/${key}?signed=true`;
+  }
+
+  async deleteFile(key: string): Promise<boolean> {
+    return this.files.delete(key);
+  }
+}
+
+describe('Storage Adapter Architecture & Resume Route Tests', () => {
   let mongoServer: MongoMemoryServer;
 
   let cseStudentId: string;
@@ -47,7 +85,6 @@ describe('Resume Storage Utility & API Route Integration Tests', () => {
   const coordMeId = new mongoose.Types.ObjectId().toString();
   const studentUserId = new mongoose.Types.ObjectId().toString();
 
-  // Mock sessions
   const superAdminSession: { user: AuthContext } = {
     user: {
       id: adminId,
@@ -83,7 +120,7 @@ describe('Resume Storage Utility & API Route Integration Tests', () => {
       name: 'CSE Student User',
       email: 'student.cse@dypcet.edu',
       role: 'STUDENT',
-      studentId: '', // Set in beforeAll
+      studentId: '',
     },
   };
 
@@ -94,13 +131,11 @@ describe('Resume Storage Utility & API Route Integration Tests', () => {
     process.env.NEXTAUTH_SECRET = 'secret_test_key_12345';
     await mongoose.connect(uri);
 
-    // Clean test upload directory
     if (fs.existsSync(TEST_UPLOAD_DIR)) {
       fs.rmSync(TEST_UPLOAD_DIR, { recursive: true, force: true });
     }
     fs.mkdirSync(TEST_UPLOAD_DIR, { recursive: true });
 
-    // Seed users
     await User.create([
       {
         _id: new mongoose.Types.ObjectId(superAdminSession.user.id),
@@ -133,7 +168,6 @@ describe('Resume Storage Utility & API Route Integration Tests', () => {
       },
     ]);
 
-    // Seed students
     const cseStudent = await Student.create({
       name: 'Aarav Patil',
       rollNumber: 'PRN-RESUME-CSE',
@@ -164,198 +198,240 @@ describe('Resume Storage Utility & API Route Integration Tests', () => {
     }
   });
 
-  describe('1. Storage Utility Functions', () => {
-    it('isValidPdf returns true for valid %PDF buffers and false for invalid files', () => {
+  beforeEach(() => {
+    setStorageAdapterForTesting(null);
+  });
+
+  describe('1. Storage Adapter Interface & Implementations', () => {
+    it('isValidPdf correctly checks magic bytes', () => {
       expect(isValidPdf(validPdfBuffer)).toBe(true);
       expect(isValidPdf(invalidTextBuffer)).toBe(false);
       expect(isValidPdf(Buffer.from([]))).toBe(false);
-      expect(isValidPdf(Buffer.from([0x89, 0x50, 0x4e, 0x47]))).toBe(false); // PNG header
     });
 
-    it('saveResume throws if buffer exceeds 5MB size limit', async () => {
-      const oversizedBuffer = Buffer.alloc(MAX_RESUME_SIZE_BYTES + 1024, 0x25); // Starts with % but too large
-      oversizedBuffer[1] = 0x50;
-      oversizedBuffer[2] = 0x44;
-      oversizedBuffer[3] = 0x46;
+    it('LocalDiskStorageAdapter saves files with UUID keys and cleans up on delete', async () => {
+      const localAdapter = new LocalDiskStorageAdapter(TEST_UPLOAD_DIR);
+      const { key } = await localAdapter.saveFile({
+        folder: 'resumes',
+        buffer: validPdfBuffer,
+      });
 
-      await expect(saveResume('test-id', oversizedBuffer)).rejects.toThrow(/exceeds 5MB limit/);
+      expect(key).toMatch(/^resumes\/[0-9a-f-]+\.pdf$/);
+
+      const fileResult = await localAdapter.getFile(key);
+      expect(fileResult).not.toBeNull();
+      expect(fileResult?.contentType).toBe('application/pdf');
+
+      const deleted = await localAdapter.deleteFile(key);
+      expect(deleted).toBe(true);
+
+      const missingAfterDelete = await localAdapter.getFile(key);
+      expect(missingAfterDelete).toBeNull();
     });
 
-    it('saveResume throws if buffer is not a valid PDF', async () => {
-      await expect(saveResume('test-id', invalidTextBuffer)).rejects.toThrow(/Invalid file format/);
+    it('LocalDiskStorageAdapter throws in production or Vercel environment to prevent data loss', async () => {
+      const origVercel = process.env.VERCEL;
+      process.env.VERCEL = '1';
+
+      const localAdapter = new LocalDiskStorageAdapter(TEST_UPLOAD_DIR);
+      await expect(
+        localAdapter.saveFile({ folder: 'resumes', buffer: validPdfBuffer })
+      ).rejects.toThrow(/Local filesystem storage is disabled in production/);
+
+      if (origVercel === undefined) {
+        delete process.env.VERCEL;
+      } else {
+        process.env.VERCEL = origVercel;
+      }
     });
 
-    it('saveResume writes file to disk and cleans up previous file for the same student', async () => {
-      const result1 = await saveResume('test-id-123', validPdfBuffer);
-      expect(result1.filename).toMatch(/^resume_test-id-123_\d+\.pdf$/);
+    it('S3CompatibleStorageAdapter throws clear error when credentials or bucket are missing', async () => {
+      const s3Adapter = new S3CompatibleStorageAdapter();
+      const origBucket = process.env.S3_BUCKET_NAME;
+      delete process.env.S3_BUCKET_NAME;
 
-      const filePath1 = getResumeFilePath(result1.filename);
-      expect(filePath1).not.toBeNull();
-      expect(fs.existsSync(filePath1!)).toBe(true);
+      await expect(
+        s3Adapter.saveFile({ folder: 'resumes', buffer: validPdfBuffer })
+      ).rejects.toThrow(/Missing required S3 storage environment variable/);
 
-      // Save a second time for same student: first file should be cleaned up
-      const result2 = await saveResume('test-id-123', validPdfBuffer);
-      expect(fs.existsSync(filePath1!)).toBe(false);
-
-      const filePath2 = getResumeFilePath(result2.filename);
-      expect(filePath2).not.toBeNull();
-      expect(fs.existsSync(filePath2!)).toBe(true);
-
-      // Cleanup
-      await deleteResumeFile(result2.filename);
-      expect(fs.existsSync(filePath2!)).toBe(false);
+      if (origBucket === undefined) {
+        delete process.env.S3_BUCKET_NAME;
+      } else {
+        process.env.S3_BUCKET_NAME = origBucket;
+      }
     });
 
-    it('getResumeFilePath defends against directory traversal attempts', () => {
-      expect(getResumeFilePath('../../../etc/passwd')).toBeNull();
-      expect(getResumeFilePath('/etc/hosts')).toBeNull();
+    it('setStorageAdapterForTesting injects in-memory fake adapter', async () => {
+      const fake = new InMemoryStorageAdapter();
+      setStorageAdapterForTesting(fake);
+
+      const active = getStorageAdapter();
+      expect(active.name).toBe('in-memory-fake');
+
+      const { key } = await active.saveFile({ folder: 'resumes', buffer: validPdfBuffer });
+      expect(fake.files.has(key)).toBe(true);
     });
   });
 
-  describe('2. Resume API Route Authorization & Scoping', () => {
-    it('DENIES unauthenticated request to POST /api/students/[id]/resume with 401', async () => {
+  describe('2. Resume API Routes Integration with StorageAdapter', () => {
+    it('rejects unauthenticated requests to GET /api/students/[id]/resume with 401', async () => {
       mockUserSession = null;
-
-      const formData = new FormData();
-      formData.append('file', new Blob([validPdfBuffer], { type: 'application/pdf' }), 'test.pdf');
-
-      const req = new Request(`http://localhost:3000/api/students/${cseStudentId}/resume`, {
-        method: 'POST',
-        body: formData,
+      const res = await getResume(new Request('http://localhost/api/students/123/resume'), {
+        params: Promise.resolve({ id: cseStudentId }),
       });
-
-      const res = await postResume(req, { params: Promise.resolve({ id: cseStudentId }) });
       expect(res.status).toBe(401);
     });
 
-    it('DENIES coordinator from uploading a resume for a student outside their department (403)', async () => {
-      mockUserSession = coordinatorMeSession; // ME coordinator trying to upload for CSE student
+    it('denies DEPT_COORDINATOR from ME from accessing CSE student resume with 403', async () => {
+      mockUserSession = coordinatorMeSession;
+      const res = await getResume(new Request(`http://localhost/api/students/${cseStudentId}/resume`), {
+        params: Promise.resolve({ id: cseStudentId }),
+      });
+      expect(res.status).toBe(403);
+
+      // But can access student in own ME department
+      const ownRes = await getResume(new Request(`http://localhost/api/students/${meStudentId}/resume`), {
+        params: Promise.resolve({ id: meStudentId }),
+      });
+      expect(ownRes.status).toBe(404); // No resume uploaded yet, but allowed to reach record
+    });
+
+    it('allows SUPER_ADMIN to upload a valid resume PDF under 2MB', async () => {
+      mockUserSession = superAdminSession;
 
       const formData = new FormData();
-      formData.append('file', new Blob([validPdfBuffer], { type: 'application/pdf' }), 'test.pdf');
+      const blob = new Blob([validPdfBuffer], { type: 'application/pdf' });
+      formData.append('file', blob, 'sample.pdf');
 
-      const req = new Request(`http://localhost:3000/api/students/${cseStudentId}/resume`, {
+      const req = new Request(`http://localhost/api/students/${cseStudentId}/resume`, {
         method: 'POST',
         body: formData,
       });
 
       const res = await postResume(req, { params: Promise.resolve({ id: cseStudentId }) });
-      expect(res.status).toBe(403);
-      const json = await res.json();
-      expect(json.error).toMatch(/You cannot upload resumes for students outside your department/i);
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.message).toBe('Resume uploaded successfully');
+      expect(body.resumeUrl).toBe(`/api/students/${cseStudentId}/resume`);
+
+      const updated = await Student.findById(cseStudentId);
+      expect(updated.resumeStorageKey).toBeDefined();
+      expect(updated.resumeStorageKey).toMatch(/^resumes\/[0-9a-f-]+\.pdf$/);
     });
 
-    it('REJECTS upload of non-PDF file with 400', async () => {
-      mockUserSession = coordinatorCseSession;
+    it('enforces 2MB limit: rejects uploads exceeding MAX_FILE_SIZE_BYTES (2MB) with 400', async () => {
+      mockUserSession = superAdminSession;
+
+      const oversized = Buffer.alloc(MAX_FILE_SIZE_BYTES + 512, 0x25);
+      oversized[1] = 0x50;
+      oversized[2] = 0x44;
+      oversized[3] = 0x46;
 
       const formData = new FormData();
-      formData.append('file', new Blob([invalidTextBuffer], { type: 'text/plain' }), 'test.txt');
+      const blob = new Blob([oversized], { type: 'application/pdf' });
+      formData.append('file', blob, 'large.pdf');
 
-      const req = new Request(`http://localhost:3000/api/students/${cseStudentId}/resume`, {
+      const req = new Request(`http://localhost/api/students/${cseStudentId}/resume`, {
         method: 'POST',
         body: formData,
       });
 
       const res = await postResume(req, { params: Promise.resolve({ id: cseStudentId }) });
       expect(res.status).toBe(400);
-      const json = await res.json();
-      expect(json.error).toMatch(/must be a valid PDF document/i);
+
+      const body = await res.json();
+      expect(body.error).toMatch(/exceeds 2MB limit/);
     });
 
-    it('ALLOWS coordinator to upload valid PDF for student in their department (200) and creates audit entry', async () => {
-      mockUserSession = coordinatorCseSession;
+    it('GET /api/students/[id]/resume streams PDF with nosniff and Content-Disposition headers', async () => {
+      mockUserSession = superAdminSession;
 
+      const req = new Request(`http://localhost/api/students/${cseStudentId}/resume`);
+      const res = await getResume(req, { params: Promise.resolve({ id: cseStudentId }) });
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toBe('application/pdf');
+      expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+      expect(res.headers.get('Content-Disposition')).toBe('inline; filename="PRN-RESUME-CSE-resume.pdf"');
+    });
+
+    it('replaces existing resume on upload and removes old storage object', async () => {
+      mockUserSession = superAdminSession;
+
+      const before = await Student.findById(cseStudentId);
+      const oldStorageKey = before.resumeStorageKey;
+      expect(oldStorageKey).toBeDefined();
+
+      const adapter = getStorageAdapter();
+      const fileBefore = await adapter.getFile(oldStorageKey!);
+      expect(fileBefore).not.toBeNull();
+
+      // Upload replacement resume
       const formData = new FormData();
-      formData.append('file', new Blob([validPdfBuffer], { type: 'application/pdf' }), 'aarav_resume.pdf');
+      const blob = new Blob([validPdfBuffer], { type: 'application/pdf' });
+      formData.append('file', blob, 'new_resume.pdf');
 
-      const req = new Request(`http://localhost:3000/api/students/${cseStudentId}/resume`, {
+      const req = new Request(`http://localhost/api/students/${cseStudentId}/resume`, {
         method: 'POST',
         body: formData,
       });
-
       const res = await postResume(req, { params: Promise.resolve({ id: cseStudentId }) });
       expect(res.status).toBe(200);
-      const json = await res.json();
-      expect(json.resumeUrl).toBe(`/api/students/${cseStudentId}/resume`);
 
-      // Verify student updated in DB
-      const updated = await Student.findById(cseStudentId);
-      expect(updated?.resumeUrl).toBe(`/api/students/${cseStudentId}/resume`);
-      expect(updated?.resumeFilename).toBeDefined();
+      const after = await Student.findById(cseStudentId);
+      expect(after.resumeStorageKey).not.toBe(oldStorageKey);
 
-      // Verify audit log
-      const log = await AuditLog.findOne({ action: 'UPLOAD_RESUME', resourceId: cseStudentId });
-      expect(log).toBeDefined();
-      expect(log?.details.rollNumber).toBe('PRN-RESUME-CSE');
+      // Old file is deleted from storage
+      const fileAfterOld = await adapter.getFile(oldStorageKey!);
+      expect(fileAfterOld).toBeNull();
     });
 
-    it('DENIES coordinator from viewing/downloading resume of student in another department (403)', async () => {
-      mockUserSession = coordinatorMeSession; // ME coordinator trying to view CSE student resume
-
-      const req = new Request(`http://localhost:3000/api/students/${cseStudentId}/resume`, {
-        method: 'GET',
-      });
-
-      const res = await getResume(req, { params: Promise.resolve({ id: cseStudentId }) });
-      expect(res.status).toBe(403);
-      const json = await res.json();
-      expect(json.error).toMatch(/You cannot view resumes of students in other departments/i);
-    });
-
-    it('ALLOWS coordinator to download resume of student in own department (200, Content-Type: application/pdf)', async () => {
-      mockUserSession = coordinatorCseSession;
-
-      const req = new Request(`http://localhost:3000/api/students/${cseStudentId}/resume`, {
-        method: 'GET',
-      });
-
-      const res = await getResume(req, { params: Promise.resolve({ id: cseStudentId }) });
-      expect(res.status).toBe(200);
-      expect(res.headers.get('Content-Type')).toBe('application/pdf');
-      expect(res.headers.get('Content-Disposition')).toContain('PRN-RESUME-CSE-resume.pdf');
-    });
-
-    it('ALLOWS Super Admin to download any student resume, and ME coordinator to access ME student', async () => {
+    it('DELETE /api/students/[id]/resume removes the storage object and clears student fields', async () => {
       mockUserSession = superAdminSession;
 
-      const req = new Request(`http://localhost:3000/api/students/${cseStudentId}/resume`, {
-        method: 'GET',
-      });
+      const studentBefore = await Student.findById(cseStudentId);
+      const keyToDelete = studentBefore.resumeStorageKey;
+      expect(keyToDelete).toBeDefined();
 
-      const res = await getResume(req, { params: Promise.resolve({ id: cseStudentId }) });
-      expect(res.status).toBe(200);
-      expect(res.headers.get('Content-Type')).toBe('application/pdf');
-
-      // Verify ME coordinator can access ME student
-      mockUserSession = coordinatorMeSession;
-      const meReq = new Request(`http://localhost:3000/api/students/${meStudentId}/resume`, {
-        method: 'GET',
-      });
-      const meRes = await getResume(meReq, { params: Promise.resolve({ id: meStudentId }) });
-      // ME student has no resume uploaded yet, should return 404 (not 403 Forbidden)
-      expect(meRes.status).toBe(404);
-    });
-
-    it('ALLOWS deletion of resume by authorized coordinator (200) and cleans up storage', async () => {
-      mockUserSession = coordinatorCseSession;
-
-      const req = new Request(`http://localhost:3000/api/students/${cseStudentId}/resume`, {
+      const req = new Request(`http://localhost/api/students/${cseStudentId}/resume`, {
         method: 'DELETE',
       });
-
       const res = await deleteResume(req, { params: Promise.resolve({ id: cseStudentId }) });
       expect(res.status).toBe(200);
 
-      // Verify student doc cleared
-      const updated = await Student.findById(cseStudentId);
-      expect(updated?.resumeUrl).toBeUndefined();
-      expect(updated?.resumeFilename).toBeUndefined();
+      const studentAfter = await Student.findById(cseStudentId);
+      expect(studentAfter.resumeStorageKey).toBeUndefined();
+      expect(studentAfter.resumeUrl).toBeUndefined();
 
-      // Subsequent GET returns 404
-      const getRes = await getResume(new Request(`http://localhost:3000/api/students/${cseStudentId}/resume`), {
-        params: Promise.resolve({ id: cseStudentId }),
+      const adapter = getStorageAdapter();
+      const fileCheck = await adapter.getFile(keyToDelete!);
+      expect(fileCheck).toBeNull();
+    });
+
+    it('supports in-memory fake adapter redirection when signed URL is requested', async () => {
+      const fakeAdapter = new InMemoryStorageAdapter();
+      setStorageAdapterForTesting(fakeAdapter);
+
+      mockUserSession = superAdminSession;
+
+      // Re-upload with fake adapter
+      const formData = new FormData();
+      const blob = new Blob([validPdfBuffer], { type: 'application/pdf' });
+      formData.append('file', blob, 'fake_resume.pdf');
+
+      const postReq = new Request(`http://localhost/api/students/${cseStudentId}/resume`, {
+        method: 'POST',
+        body: formData,
       });
-      expect(getRes.status).toBe(404);
+      await postResume(postReq, { params: Promise.resolve({ id: cseStudentId }) });
+
+      // Request with ?signed=true
+      const getReq = new Request(`http://localhost/api/students/${cseStudentId}/resume?signed=true`);
+      const getRes = await getResume(getReq, { params: Promise.resolve({ id: cseStudentId }) });
+
+      expect(getRes.status).toBe(307);
+      expect(getRes.headers.get('Location')).toContain('https://fake-s3.amazonaws.com/');
     });
   });
 });

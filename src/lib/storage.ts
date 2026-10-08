@@ -1,10 +1,23 @@
 import fs from 'fs';
 import path from 'path';
+import {
+  getStorageAdapter,
+  isValidPdf,
+  MAX_FILE_SIZE_BYTES,
+} from './storage/index';
 
-export const MAX_RESUME_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+export * from './storage/index';
 
+// Backwards compatibility alias
+export const MAX_RESUME_SIZE_BYTES = MAX_FILE_SIZE_BYTES; // 2 MB strict limit
+
+/**
+ * Legacy helper for test compatibility or direct path lookup.
+ */
 export function getUploadDir(): string {
-  const dir = process.env.UPLOAD_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), 'uploads', 'resumes');
+  const dir =
+    process.env.UPLOAD_DIR ||
+    path.join(/*turbopackIgnore: true*/ process.cwd(), 'uploads', 'resumes');
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -12,62 +25,39 @@ export function getUploadDir(): string {
 }
 
 /**
- * Validates that the buffer is a valid PDF by checking magic bytes `%PDF` (0x25, 0x50, 0x44, 0x46)
- */
-export function isValidPdf(buffer: Buffer): boolean {
-  if (buffer.length < 4) return false;
-  return (
-    buffer[0] === 0x25 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x44 &&
-    buffer[3] === 0x46
-  );
-}
-
-/**
- * Saves a student's resume PDF buffer to disk with sanitized filename,
- * deleting any previous resume files for this student.
+ * Legacy helper bridging to the storage adapter.
  */
 export async function saveResume(
   studentId: string,
   buffer: Buffer
-): Promise<{ filename: string; relativeUrl: string }> {
-  if (buffer.length > MAX_RESUME_SIZE_BYTES) {
-    throw new Error(`File size exceeds 5MB limit (${(buffer.length / (1024 * 1024)).toFixed(2)} MB).`);
+): Promise<{ filename: string; relativeUrl: string; key: string }> {
+  if (buffer.length > MAX_FILE_SIZE_BYTES) {
+    throw new Error(
+      `File size exceeds 2MB limit (${(buffer.length / (1024 * 1024)).toFixed(2)} MB).`
+    );
   }
 
   if (!isValidPdf(buffer)) {
     throw new Error('Invalid file format. Only valid PDF files are permitted.');
   }
 
-  const uploadDir = getUploadDir();
-  const sanitizedId = studentId.replace(/[^a-zA-Z0-9_-]/g, '');
-
-  // Clean up any prior resumes for this student to prevent orphaned files
-  try {
-    const existingFiles = await fs.promises.readdir(uploadDir);
-    for (const file of existingFiles) {
-      if (file.startsWith(`resume_${sanitizedId}_`) && file.endsWith('.pdf')) {
-        await fs.promises.unlink(path.join(uploadDir, file)).catch(() => {});
-      }
-    }
-  } catch {
-    // Ignore cleanup error if directory empty
-  }
-
-  const filename = `resume_${sanitizedId}_${Date.now()}.pdf`;
-  const targetPath = path.join(uploadDir, filename);
-
-  await fs.promises.writeFile(targetPath, buffer);
+  const adapter = getStorageAdapter();
+  const { key } = await adapter.saveFile({
+    folder: 'resumes',
+    buffer,
+    contentType: 'application/pdf',
+  });
 
   return {
-    filename,
+    filename: key.split('/').pop() || key,
     relativeUrl: `/api/students/${studentId}/resume`,
+    key,
   };
 }
 
 /**
  * Resolves safe absolute path for a resume filename, preventing directory traversal.
+ * Kept for legacy fallback when reading local disk files.
  */
 export function getResumeFilePath(filename: string): string | null {
   const uploadDir = getUploadDir();
@@ -88,14 +78,21 @@ export function getResumeFilePath(filename: string): string | null {
 /**
  * Deletes a resume file from disk safely.
  */
-export async function deleteResumeFile(filename: string): Promise<boolean> {
-  const filePath = getResumeFilePath(filename);
-  if (!filePath) return false;
+export async function deleteResumeFile(filenameOrKey: string): Promise<boolean> {
+  const adapter = getStorageAdapter();
+  const key = filenameOrKey.includes('/') ? filenameOrKey : `resumes/${filenameOrKey}`;
+  const deleted = await adapter.deleteFile(key);
+  if (deleted) return true;
 
-  try {
-    await fs.promises.unlink(filePath);
-    return true;
-  } catch {
-    return false;
+  // Fallback to legacy local path
+  const legacyPath = getResumeFilePath(filenameOrKey);
+  if (legacyPath) {
+    try {
+      await fs.promises.unlink(legacyPath);
+      return true;
+    } catch {
+      return false;
+    }
   }
+  return false;
 }
