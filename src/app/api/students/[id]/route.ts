@@ -81,7 +81,52 @@ export async function PUT(
       );
     }
 
-    const { name, rollNumber, department: rawDept, branch: rawBranch, year, email, phone } = parseResult.data;
+    const {
+      name,
+      rollNumber,
+      department: rawDept,
+      branch: rawBranch,
+      year,
+      passoutYear,
+      placementStatus,
+      placementDetails,
+      statusChangeReason,
+      cgpa,
+      backlogs,
+      resumeUrl,
+      email,
+      phone,
+    } = parseResult.data;
+
+    // Field whitelisting per role: Only TPO and SUPER_ADMIN can modify placement status
+    if (auth.user.role === 'DEPT_COORDINATOR') {
+      if (placementStatus !== undefined || placementDetails !== undefined) {
+        return NextResponse.json(
+          {
+            error:
+              'Forbidden. Placement status changes can only be performed by TPO and Super Administrators.',
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    let isPlacementStatusChanged = false;
+    if (placementStatus !== undefined && placementStatus !== currentStudent.placementStatus) {
+      isPlacementStatusChanged = true;
+      // Moving out of 'Placed' status strictly requires a reason
+      if (currentStudent.placementStatus === 'Placed' && placementStatus !== 'Placed') {
+        if (!statusChangeReason || !statusChangeReason.trim()) {
+          return NextResponse.json(
+            {
+              error:
+                "A mandatory reason (statusChangeReason) is required when moving a student out of 'Placed' status.",
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
 
     let validatedDepartment: string | undefined = undefined;
     if (rawDept || rawBranch) {
@@ -117,11 +162,28 @@ export async function PUT(
     if (name !== undefined) updatePayload.name = name;
     if (rollNumber !== undefined) updatePayload.rollNumber = rollNumber;
     if (year !== undefined) updatePayload.year = year;
+    if (passoutYear !== undefined) updatePayload.passoutYear = passoutYear;
     if (email !== undefined) updatePayload.email = email;
     if (phone !== undefined) updatePayload.phone = phone;
+    if (cgpa !== undefined) updatePayload.cgpa = cgpa;
+    if (backlogs !== undefined) updatePayload.backlogs = backlogs;
+    if (resumeUrl !== undefined) updatePayload.resumeUrl = resumeUrl;
     if (validatedDepartment !== undefined) {
       updatePayload.department = validatedDepartment;
       // Do not write to legacy branch field!
+    }
+    if (placementStatus !== undefined) {
+      updatePayload.placementStatus = placementStatus;
+      const details = { ...(currentStudent.placementDetails?.toObject?.() || currentStudent.placementDetails || {}) };
+      if (placementDetails) {
+        Object.assign(details, placementDetails);
+      }
+      if (statusChangeReason) {
+        details.reasonForStatusChange = statusChangeReason;
+      }
+      updatePayload.placementDetails = details;
+    } else if (placementDetails !== undefined) {
+      updatePayload.placementDetails = placementDetails;
     }
 
     const updatedStudent = await Student.findByIdAndUpdate(
@@ -130,6 +192,23 @@ export async function PUT(
       { new: true, runValidators: true }
     );
 
+    if (isPlacementStatusChanged) {
+      await logAudit({
+        userId: auth.user.id,
+        userEmail: auth.user.email || undefined,
+        userRole: auth.user.role,
+        action: 'UPDATE_PLACEMENT_STATUS',
+        resource: 'Student',
+        resourceId: id,
+        details: {
+          rollNumber: currentStudent.rollNumber,
+          previousStatus: currentStudent.placementStatus,
+          newStatus: placementStatus,
+          reason: statusChangeReason || undefined,
+        },
+      });
+    }
+
     await logAudit({
       userId: auth.user.id,
       userEmail: auth.user.email || undefined,
@@ -137,7 +216,7 @@ export async function PUT(
       action: 'UPDATE_STUDENT',
       resource: 'Student',
       resourceId: id,
-      details: { rollNumber: updatedStudent?.rollNumber, branch: updatedStudent?.branch },
+      details: { rollNumber: updatedStudent?.rollNumber, department: updatedStudent?.department },
     });
 
     return NextResponse.json(updatedStudent, { status: 200 });

@@ -5,6 +5,7 @@ import { requirePermission, canAccessDepartment } from '@/lib/auth-guards';
 import { logAudit } from '@/lib/audit';
 import { studentQuerySchema, createStudentSchema } from '@/lib/validations/student';
 import { resolveStudentDepartment } from '@/lib/departmentMapper';
+import { DEFAULT_PASSOUT_YEAR } from '@/config/collegeConfig';
 
 export async function GET(request: Request) {
   const auth = await requirePermission('students', 'read');
@@ -21,25 +22,60 @@ export async function GET(request: Request) {
       );
     }
 
-    const { page, limit, search, branch, year, sortBy = 'name', sortOrder = 'asc', all } = parsedQuery.data;
+    const {
+      page,
+      limit,
+      search,
+      department,
+      branch,
+      year,
+      passoutYear,
+      batch,
+      placementStatus,
+      minCgpa,
+      maxBacklogs,
+      sortBy = 'name',
+      sortOrder = 'asc',
+      all,
+    } = parsedQuery.data;
 
     await dbConnect();
 
     const andConditions: Record<string, unknown>[] = [];
 
+    // Batch / Passout Year Isolation: Defaults to current graduating batch so cohorts never mix
+    const requestedBatch = passoutYear ?? batch;
+    const effectiveBatch = requestedBatch !== undefined ? requestedBatch : DEFAULT_PASSOUT_YEAR;
+    if (effectiveBatch && effectiveBatch > 0) {
+      andConditions.push({ passoutYear: effectiveBatch });
+    }
+
     // Department Coordinator can only view students from their own department
+    const deptFilter = department || branch;
     if (auth.user.role === 'DEPT_COORDINATOR' && auth.user.department) {
       andConditions.push({
         $or: [{ department: auth.user.department }, { branch: auth.user.department }],
       });
-    } else if (branch && branch !== 'all') {
+    } else if (deptFilter && deptFilter !== 'all') {
       andConditions.push({
-        $or: [{ department: branch }, { branch: branch }],
+        $or: [{ department: deptFilter }, { branch: deptFilter }],
       });
     }
 
     if (year && year !== 'all') {
       andConditions.push({ year });
+    }
+
+    if (placementStatus && placementStatus !== 'all') {
+      andConditions.push({ placementStatus });
+    }
+
+    if (minCgpa !== undefined && minCgpa > 0) {
+      andConditions.push({ cgpa: { $gte: minCgpa } });
+    }
+
+    if (maxBacklogs !== undefined) {
+      andConditions.push({ backlogs: { $lte: maxBacklogs } });
     }
 
     if (search) {

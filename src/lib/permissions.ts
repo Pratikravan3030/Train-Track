@@ -19,7 +19,14 @@ export type Resource =
   | 'users'
   | 'audit';
 
-export type Action = 'read' | 'create' | 'update' | 'delete';
+export type Action =
+  | 'read'
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'update_placement'
+  | 'export'
+  | 'import';
 
 export type PermissionScope = 'all' | 'own-department' | 'own-record' | 'none';
 
@@ -41,6 +48,9 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
       create: { scope: 'all' },
       update: { scope: 'all' },
       delete: { scope: 'all' },
+      update_placement: { scope: 'all' },
+      export: { scope: 'all' },
+      import: { scope: 'all' },
     },
     sessions: {
       read: { scope: 'all' },
@@ -85,6 +95,9 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
       create: { scope: 'all' },
       update: { scope: 'all' },
       delete: { scope: 'all' },
+      update_placement: { scope: 'all' },
+      export: { scope: 'all' },
+      import: { scope: 'all' },
     },
     sessions: {
       read: { scope: 'all' },
@@ -118,6 +131,9 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
       create: { scope: 'own-department' },
       update: { scope: 'own-department' },
       delete: { scope: 'none', notes: 'Coordinators cannot delete students' },
+      update_placement: { scope: 'none', notes: 'Placement status changes only by TPO/SUPER_ADMIN' },
+      export: { scope: 'own-department' },
+      import: { scope: 'own-department' },
     },
     sessions: {
       read: { scope: 'all', notes: 'Sessions visible, roster scoped to own department' },
@@ -154,6 +170,9 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
       create: { scope: 'none' },
       update: { scope: 'none' },
       delete: { scope: 'none' },
+      update_placement: { scope: 'none' },
+      export: { scope: 'none' },
+      import: { scope: 'none' },
     },
     sessions: {
       read: { scope: 'all', notes: 'Read session details without attendee roster' },

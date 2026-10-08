@@ -6,27 +6,42 @@ import Attendance from '@/models/Attendance';
 import Feedback from '@/models/Feedback';
 import { requirePermission } from '@/lib/auth-guards';
 
-export async function GET() {
+import { DEFAULT_PASSOUT_YEAR } from '@/config/collegeConfig';
+
+export async function GET(request: Request) {
   const auth = await requirePermission('dashboard', 'read');
   if (!auth.authorized) return auth.response;
 
   try {
     await dbConnect();
 
+    const { searchParams } = new URL(request.url);
+    const batchParam = searchParams.get('batch') || searchParams.get('passoutYear');
+    const effectiveBatch =
+      batchParam && batchParam !== 'all'
+        ? parseInt(batchParam, 10)
+        : batchParam === 'all'
+        ? null
+        : DEFAULT_PASSOUT_YEAR;
+
     const isDeptCoordinator = auth.scope === 'own-department' && auth.user.department;
     const coordinatorDept = isDeptCoordinator ? auth.user.department : null;
 
-    // Student scope filter
-    const studentFilter = coordinatorDept
-      ? { $or: [{ department: coordinatorDept }, { branch: coordinatorDept }] }
-      : {};
+    // Student scope & batch filter
+    const studentFilter: Record<string, unknown> = {};
+    if (coordinatorDept) {
+      studentFilter.$or = [{ department: coordinatorDept }, { branch: coordinatorDept }];
+    }
+    if (effectiveBatch) {
+      studentFilter.passoutYear = effectiveBatch;
+    }
 
     // 1. Total Student Metrics
     const totalStudents = await Student.countDocuments(studentFilter);
 
     // 2. Department-wise distribution (real aggregation)
     const deptAgg = await Student.aggregate([
-      ...(coordinatorDept ? [{ $match: { $or: [{ department: coordinatorDept }, { branch: coordinatorDept }] } }] : []),
+      { $match: studentFilter },
       { $group: { _id: { $ifNull: ['$department', '$branch'] }, count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]);
@@ -37,7 +52,7 @@ export async function GET() {
 
     // 3. Year-wise distribution (real aggregation)
     const yearAgg = await Student.aggregate([
-      ...(coordinatorDept ? [{ $match: { $or: [{ department: coordinatorDept }, { branch: coordinatorDept }] } }] : []),
+      { $match: studentFilter },
       { $group: { _id: '$year', count: { $sum: 1 } } },
       { $sort: { _id: 1 } },
     ]);
@@ -46,15 +61,52 @@ export async function GET() {
       students: y.count,
     }));
 
-    // 4. Training Sessions
+    // 4. Placement Statistics
+    const placedCount = await Student.countDocuments({
+      ...studentFilter,
+      placementStatus: 'Placed',
+    });
+    const placementRate =
+      totalStudents > 0 ? parseFloat(((placedCount / totalStudents) * 100).toFixed(1)) : 0;
+
+    const placementAgg = await Student.aggregate([
+      { $match: studentFilter },
+      { $group: { _id: { $ifNull: ['$placementStatus', 'Not Placed'] }, count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+    ]);
+    const placementDistribution = placementAgg.map((p) => ({
+      status: p._id as string,
+      count: p.count as number,
+    }));
+
+    const packageAgg = await Student.aggregate([
+      {
+        $match: {
+          ...studentFilter,
+          placementStatus: 'Placed',
+          'placementDetails.packageLPA': { $gt: 0 },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          avgPackage: { $avg: '$placementDetails.packageLPA' },
+          highestPackage: { $max: '$placementDetails.packageLPA' },
+        },
+      },
+    ]);
+    const avgPackageLPA =
+      packageAgg.length > 0 ? parseFloat(packageAgg[0].avgPackage.toFixed(2)) : 0;
+    const highestPackageLPA =
+      packageAgg.length > 0 ? parseFloat(packageAgg[0].highestPackage.toFixed(2)) : 0;
+
+    // 5. Training Sessions
     const totalSessions = await TrainingSession.countDocuments();
 
-    // 5. Scoped Attendance Statistics
+    // 6. Scoped Attendance Statistics
     let deptStudentIds: unknown[] = [];
     if (coordinatorDept) {
-      deptStudentIds = await Student.find({
-        $or: [{ department: coordinatorDept }, { branch: coordinatorDept }],
-      }).distinct('_id');
+      deptStudentIds = await Student.find(studentFilter).distinct('_id');
     }
 
     const attendanceFilter = coordinatorDept ? { studentId: { $in: deptStudentIds } } : {};
@@ -68,7 +120,7 @@ export async function GET() {
         ? parseFloat(((presentAttendanceRecords / totalAttendanceRecords) * 100).toFixed(1))
         : 0;
 
-    // 6. Scoped Overall Average Feedback Rating (excludes staff notes from averages)
+    // 7. Scoped Overall Average Feedback Rating (excludes staff notes from averages)
     const feedbackMatchConditions: Record<string, unknown> = {
       source: { $ne: 'staff' },
     };
@@ -90,7 +142,7 @@ export async function GET() {
     const averageRating = overallAvgObj.length > 0 ? parseFloat(overallAvgObj[0].averageRating.toFixed(2)) : 0;
     const totalFeedbacks = overallAvgObj.length > 0 ? overallAvgObj[0].totalFeedbacks : 0;
 
-    // 7. Session Average Ratings (chronological for Recharts, scoped by dept)
+    // 8. Session Average Ratings (chronological for Recharts, scoped by dept)
     const sessions = await TrainingSession.find({}).sort({ date: 1 });
     const feedbackStats = await Feedback.aggregate([
       ...feedbackMatch,
@@ -111,7 +163,7 @@ export async function GET() {
       averageRating: parseFloat((ratingsMap.get(session._id.toString()) || 0).toFixed(2)),
     }));
 
-    // 8. Upcoming Sessions (from start of today onwards)
+    // 9. Upcoming Sessions (from start of today onwards)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const upcomingSessions = await TrainingSession.find({
@@ -123,6 +175,12 @@ export async function GET() {
     return NextResponse.json(
       {
         totalStudents,
+        placedStudents: placedCount,
+        placementRate,
+        placementDistribution,
+        avgPackageLPA,
+        highestPackageLPA,
+        selectedBatch: effectiveBatch || 'all',
         totalSessions,
         totalAttendanceRecords,
         overallAttendanceRate,

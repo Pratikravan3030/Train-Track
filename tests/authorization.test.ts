@@ -172,6 +172,36 @@ describe('Central RBAC Permission Policy & Authorization Enforcement', () => {
     });
   });
 
+  describe('Placement Status & Data Transfer Action Permissions', () => {
+    it('ALLOWS only SUPER_ADMIN and TPO to update_placement on students', () => {
+      expect(isAllowed('SUPER_ADMIN', 'students', 'update_placement')).toBe(true);
+      expect(getPermission('SUPER_ADMIN', 'students', 'update_placement').scope).toBe('all');
+
+      expect(isAllowed('TPO', 'students', 'update_placement')).toBe(true);
+      expect(getPermission('TPO', 'students', 'update_placement').scope).toBe('all');
+
+      expect(isAllowed('DEPT_COORDINATOR', 'students', 'update_placement')).toBe(false);
+      expect(getPermission('DEPT_COORDINATOR', 'students', 'update_placement').scope).toBe('none');
+
+      expect(isAllowed('STUDENT', 'students', 'update_placement')).toBe(false);
+      expect(getPermission('STUDENT', 'students', 'update_placement').scope).toBe('none');
+    });
+
+    it('scopes export and import permissions properly per role', () => {
+      expect(getPermission('SUPER_ADMIN', 'students', 'export').scope).toBe('all');
+      expect(getPermission('SUPER_ADMIN', 'students', 'import').scope).toBe('all');
+
+      expect(getPermission('TPO', 'students', 'export').scope).toBe('all');
+      expect(getPermission('TPO', 'students', 'import').scope).toBe('all');
+
+      expect(getPermission('DEPT_COORDINATOR', 'students', 'export').scope).toBe('own-department');
+      expect(getPermission('DEPT_COORDINATOR', 'students', 'import').scope).toBe('own-department');
+
+      expect(getPermission('STUDENT', 'students', 'export').scope).toBe('none');
+      expect(getPermission('STUDENT', 'students', 'import').scope).toBe('none');
+    });
+  });
+
   describe('Role-Resource-Action Exhaustive Matrix Check', () => {
     const roles = COLLEGE_ROLES;
     const resources: Resource[] = [
@@ -185,7 +215,15 @@ describe('Central RBAC Permission Policy & Authorization Enforcement', () => {
       'users',
       'audit',
     ];
-    const actions: Action[] = ['read', 'create', 'update', 'delete'];
+    const actions: Action[] = [
+      'read',
+      'create',
+      'update',
+      'delete',
+      'update_placement',
+      'export',
+      'import',
+    ];
 
     it('returns a valid PermissionRule with a defined scope for every combination', () => {
       for (const role of roles) {

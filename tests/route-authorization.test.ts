@@ -1109,4 +1109,148 @@ describe('Route-Level Authorization & Real Handler Scope Tests (In-Memory MongoD
       expect(() => resolveStudentDepartment({ department: 'invalid-xyz' })).toThrow(/Invalid department/);
     });
   });
+
+  // =========================================================================
+  // 9. PHASE 3: BATCH ISOLATION & PLACEMENT STATUS GOVERNANCE
+  // =========================================================================
+  describe('Phase 3: Batch Isolation & Placement Status Governance', () => {
+    let placedStudentId: string;
+    let cohort2025StudentId: string;
+
+    beforeEach(async () => {
+      mockUserSession = tpoSession;
+
+      // Seed a Placed student in 2026 batch
+      const placedStudent = await Student.create({
+        name: 'Placed CSE Student',
+        rollNumber: 'PRN-PLACED-001',
+        department: 'CSE',
+        year: 'Final Year',
+        passoutYear: 2026,
+        email: 'placed.cse@dypcet.edu',
+        placementStatus: 'Placed',
+        placementDetails: {
+          companyName: 'TCS Digital',
+          packageLPA: 7.5,
+          placedDate: new Date('2025-09-15'),
+        },
+      });
+      placedStudentId = placedStudent._id.toString();
+
+      // Seed a student in 2025 batch
+      const cohort2025Student = await Student.create({
+        name: 'Cohort 2025 CSE Student',
+        rollNumber: 'PRN-2025-001',
+        department: 'CSE',
+        year: 'Final Year',
+        passoutYear: 2025,
+        email: 'alumni2025@dypcet.edu',
+        placementStatus: 'Placed',
+      });
+      cohort2025StudentId = cohort2025Student._id.toString();
+    });
+
+    it('DENIES coordinator from modifying placementStatus on a student (403)', async () => {
+      mockUserSession = coordinatorDeptASession;
+
+      const res = await putStudentById(
+        new Request(`http://localhost:3000/api/students/${placedStudentId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            placementStatus: 'Not Placed',
+          }),
+        }),
+        { params: Promise.resolve({ id: placedStudentId }) }
+      );
+
+      expect(res.status).toBe(403);
+      const json = await res.json();
+      expect(json.error).toMatch(/Placement status changes can only be performed by TPO and Super Administrators/i);
+    });
+
+    it('REJECTS TPO moving student out of Placed status without a mandatory statusChangeReason (400)', async () => {
+      mockUserSession = tpoSession;
+
+      const res = await putStudentById(
+        new Request(`http://localhost:3000/api/students/${placedStudentId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            placementStatus: 'Not Placed',
+          }),
+        }),
+        { params: Promise.resolve({ id: placedStudentId }) }
+      );
+
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toMatch(/A mandatory reason .* is required when moving a student out of 'Placed' status/i);
+    });
+
+    it('ALLOWS TPO to move student out of Placed with reason, updating details and writing an audit log (200)', async () => {
+      mockUserSession = tpoSession;
+
+      const res = await putStudentById(
+        new Request(`http://localhost:3000/api/students/${placedStudentId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            placementStatus: 'Not Placed',
+            statusChangeReason: 'Offer revoked due to project cancellation by client',
+          }),
+        }),
+        { params: Promise.resolve({ id: placedStudentId }) }
+      );
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.placementStatus).toBe('Not Placed');
+      expect(json.placementDetails?.reasonForStatusChange).toBe('Offer revoked due to project cancellation by client');
+
+      // Verify audit log entry
+      const auditLog = await AuditLog.findOne({
+        action: 'UPDATE_PLACEMENT_STATUS',
+        resourceId: placedStudentId,
+      });
+      expect(auditLog).toBeDefined();
+      expect(auditLog?.details.previousStatus).toBe('Placed');
+      expect(auditLog?.details.newStatus).toBe('Not Placed');
+      expect(auditLog?.details.reason).toBe('Offer revoked due to project cancellation by client');
+    });
+
+    it('ISOLATES cohorts by batch: default GET /api/students returns only current batch (2026)', async () => {
+      mockUserSession = tpoSession;
+
+      const res = await getStudents(new Request('http://localhost:3000/api/students'));
+      expect(res.status).toBe(200);
+      const json = await res.json();
+
+      const studentIds = json.data.map((s: { _id: string }) => s._id.toString());
+      expect(studentIds).toContain(placedStudentId);
+      expect(studentIds).not.toContain(cohort2025StudentId);
+    });
+
+    it('allows explicit filtering by batch in GET /api/students?batch=2025', async () => {
+      mockUserSession = tpoSession;
+
+      const res = await getStudents(new Request('http://localhost:3000/api/students?batch=2025'));
+      expect(res.status).toBe(200);
+      const json = await res.json();
+
+      const studentIds = json.data.map((s: { _id: string }) => s._id.toString());
+      expect(studentIds).toContain(cohort2025StudentId);
+      expect(studentIds).not.toContain(placedStudentId);
+    });
+
+    it('aggregates placement stats filtered by batch in GET /api/dashboard-stats', async () => {
+      mockUserSession = tpoSession;
+
+      const res = await getDashboardStats(new Request('http://localhost:3000/api/dashboard-stats?batch=2026'));
+      expect(res.status).toBe(200);
+      const json = await res.json();
+
+      expect(json.selectedBatch).toBe(2026);
+      expect(typeof json.placedStudents).toBe('number');
+      expect(typeof json.placementRate).toBe('number');
+      expect(Array.isArray(json.placementDistribution)).toBe(true);
+    });
+  });
 });
