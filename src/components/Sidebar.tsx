@@ -11,7 +11,9 @@ import {
   MessageSquare, 
   X,
   ShieldCheck,
-  Building2
+  Building2,
+  Briefcase,
+  Award
 } from 'lucide-react';
 import { COLLEGE_CONFIG } from '@/config/collegeConfig';
 import { CollegeLogo } from './ui/CollegeLogo';
@@ -26,15 +28,24 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
 
-  const navItems = [
-    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Students Directory', href: '/students', icon: Users },
-    { name: 'Training Sessions', href: '/sessions', icon: Calendar },
-    { name: 'Feedback Logs', href: '/feedback', icon: MessageSquare },
-    ...(session?.user?.role === 'SUPER_ADMIN'
-      ? [{ name: 'User Accounts', href: '/admin/users', icon: ShieldCheck }]
-      : []),
-  ];
+  const isStudent = session?.user?.role === 'STUDENT';
+
+  const navItems = isStudent
+    ? [
+        { name: 'Training Sessions', href: '/sessions', icon: Calendar },
+      ]
+    : [
+        { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+        { name: 'Students Directory', href: '/students', icon: Users },
+        { name: 'Placement Drives', href: '/drives', icon: Briefcase },
+        { name: 'Company Directory', href: '/companies', icon: Building2 },
+        { name: 'Offers & Outcomes', href: '/offers', icon: Award },
+        { name: 'Training Sessions', href: '/sessions', icon: Calendar },
+        { name: 'Feedback Logs', href: '/feedback', icon: MessageSquare },
+        ...(session?.user?.role === 'SUPER_ADMIN'
+          ? [{ name: 'User Accounts', href: '/admin/users', icon: ShieldCheck }]
+          : []),
+      ];
 
   const userRole = session?.user?.role || 'TPO';
   const roleConfig = COLLEGE_CONFIG.roles[userRole as keyof typeof COLLEGE_CONFIG.roles] || {
