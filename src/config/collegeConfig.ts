@@ -51,6 +51,9 @@ export const COLLEGE_CONFIG = {
     contactPerson: '[UNVERIFIED: Training & Placement Officer]',
   },
   academic: {
+    currentAcademicYear: '2025-2026',
+    defaultPassoutYear: 2026,
+    passoutYears: [2023, 2024, 2025, 2026, 2027, 2028, 2029] as const,
     /* UNVERIFIED: Standard DYPCET engineering departments to be confirmed against college handbook */
     departments: [
       { code: 'CSE', name: 'Computer Science & Engineering' },
@@ -90,3 +93,17 @@ export const COLLEGE_CONFIG = {
 
 export const DEFAULT_DEPARTMENT_NAMES = COLLEGE_CONFIG.academic.departments.map((d) => d.name);
 export const DEFAULT_ACADEMIC_YEARS = [...COLLEGE_CONFIG.academic.years];
+
+export const CURRENT_ACADEMIC_YEAR = COLLEGE_CONFIG.academic.currentAcademicYear;
+export const DEFAULT_PASSOUT_YEAR = COLLEGE_CONFIG.academic.defaultPassoutYear;
+export const VALID_PASSOUT_YEARS = COLLEGE_CONFIG.academic.passoutYears;
+export type PassoutYear = (typeof VALID_PASSOUT_YEARS)[number];
+
+export const PLACEMENT_STATUSES = [
+  'Not Placed',
+  'Placed',
+  'Opted Out',
+  'Higher Studies',
+  'Entrepreneurship',
+] as const;
+export type PlacementStatus = (typeof PLACEMENT_STATUSES)[number];

@@ -149,7 +149,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: firstError, details: parseResult.error.format() }, { status: 400 });
     }
 
-    const { name, rollNumber, department: rawDept, branch: rawBranch, year, email, phone } = parseResult.data;
+    const {
+      name,
+      rollNumber,
+      department: rawDept,
+      branch: rawBranch,
+      year,
+      passoutYear,
+      placementStatus,
+      placementDetails,
+      cgpa,
+      backlogs,
+      resumeUrl,
+      email,
+      phone,
+    } = parseResult.data;
 
     let validatedDepartment: string;
     try {
@@ -190,6 +204,12 @@ export async function POST(request: Request) {
       rollNumber,
       department: validatedDepartment,
       year,
+      passoutYear,
+      placementStatus: placementStatus || 'Not Placed',
+      placementDetails,
+      cgpa,
+      backlogs: backlogs ?? 0,
+      resumeUrl,
       email,
       phone,
     });

@@ -92,6 +92,8 @@ async function seed() {
       rollNumber: s.rollNumber,
       department: resolveStudentDepartment({ branch: s.branch }),
       year: s.year,
+      passoutYear: 2026,
+      placementStatus: 'Not Placed' as const,
       email: s.email,
     }));
     const createdStudents = await Student.insertMany(studentsToInsert);

@@ -88,6 +88,7 @@ describe('Route-Level Authorization & Real Handler Scope Tests (In-Memory MongoD
       branch: 'CSE',
       department: 'CSE',
       year: 'Third Year',
+      passoutYear: 2026,
       email: 'aarav.cse@dypcet.edu',
     });
     studentAId = studentA._id.toString();
@@ -99,6 +100,7 @@ describe('Route-Level Authorization & Real Handler Scope Tests (In-Memory MongoD
       branch: 'ME',
       department: 'ME',
       year: 'Final Year',
+      passoutYear: 2026,
       email: 'rohan.me@dypcet.edu',
     });
     studentBId = studentB._id.toString();
@@ -1051,6 +1053,7 @@ describe('Route-Level Authorization & Real Handler Scope Tests (In-Memory MongoD
           rollNumber: 'PRN-INV-001',
           department: 'INVALID_DEPT' as never,
           year: 'First Year',
+          passoutYear: 2026,
           email: 'invdept@dypcet.edu',
         })
       ).rejects.toThrow(/is not a valid department code/);
