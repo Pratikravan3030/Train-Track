@@ -4,7 +4,7 @@ import path from 'path';
 export const MAX_RESUME_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export function getUploadDir(): string {
-  const dir = process.env.UPLOAD_DIR || path.resolve(process.cwd(), 'uploads/resumes');
+  const dir = process.env.UPLOAD_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), 'uploads', 'resumes');
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
