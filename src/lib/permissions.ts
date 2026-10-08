@@ -17,7 +17,11 @@ export type Resource =
   | 'search'
   | 'health'
   | 'users'
-  | 'audit';
+  | 'audit'
+  | 'companies'
+  | 'drives'
+  | 'applications'
+  | 'offers';
 
 export type Action =
   | 'read'
@@ -26,7 +30,11 @@ export type Action =
   | 'delete'
   | 'update_placement'
   | 'export'
-  | 'import';
+  | 'import'
+  | 'manage_shortlist'
+  | 'register'
+  | 'withdraw'
+  | 'override';
 
 export type PermissionScope = 'all' | 'own-department' | 'own-record' | 'none';
 
@@ -87,6 +95,34 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
     audit: {
       read: { scope: 'all' },
     },
+    companies: {
+      read: { scope: 'all' },
+      create: { scope: 'all' },
+      update: { scope: 'all' },
+      delete: { scope: 'all' },
+    },
+    drives: {
+      read: { scope: 'all' },
+      create: { scope: 'all' },
+      update: { scope: 'all' },
+      delete: { scope: 'all' },
+      manage_shortlist: { scope: 'all' },
+      export: { scope: 'all' },
+    },
+    applications: {
+      read: { scope: 'all' },
+      register: { scope: 'all' },
+      withdraw: { scope: 'all' },
+      override: { scope: 'all' },
+      export: { scope: 'all' },
+    },
+    offers: {
+      read: { scope: 'all' },
+      create: { scope: 'all' },
+      update: { scope: 'all' },
+      delete: { scope: 'all' },
+      override: { scope: 'all' },
+    },
   },
 
   TPO: {
@@ -119,6 +155,34 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
     },
     search: {
       read: { scope: 'all' },
+    },
+    companies: {
+      read: { scope: 'all' },
+      create: { scope: 'all' },
+      update: { scope: 'all' },
+      delete: { scope: 'all' },
+    },
+    drives: {
+      read: { scope: 'all' },
+      create: { scope: 'all' },
+      update: { scope: 'all' },
+      delete: { scope: 'all' },
+      manage_shortlist: { scope: 'all' },
+      export: { scope: 'all' },
+    },
+    applications: {
+      read: { scope: 'all' },
+      register: { scope: 'all' },
+      withdraw: { scope: 'all' },
+      override: { scope: 'all' },
+      export: { scope: 'all' },
+    },
+    offers: {
+      read: { scope: 'all' },
+      create: { scope: 'all' },
+      update: { scope: 'all' },
+      delete: { scope: 'all' },
+      override: { scope: 'all' },
     },
     // health: none (SUPER_ADMIN only)
     // users: none
@@ -158,13 +222,40 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
     search: {
       read: { scope: 'own-department', notes: 'Students scoped to dept, sessions campus-wide' },
     },
+    companies: {
+      read: { scope: 'all', notes: 'Visible, but HR contacts hidden' },
+      create: { scope: 'none' },
+      update: { scope: 'none' },
+      delete: { scope: 'none' },
+    },
+    drives: {
+      read: { scope: 'all', notes: 'Drive details visible, applicants scoped to own dept' },
+      create: { scope: 'none' },
+      update: { scope: 'none' },
+      delete: { scope: 'none' },
+      manage_shortlist: { scope: 'none' },
+      export: { scope: 'own-department' },
+    },
+    applications: {
+      read: { scope: 'own-department', notes: 'Applications from own department students only' },
+      register: { scope: 'none' },
+      withdraw: { scope: 'none' },
+      override: { scope: 'none' },
+      export: { scope: 'own-department' },
+    },
+    offers: {
+      read: { scope: 'own-department', notes: 'Offers for own department students only' },
+      create: { scope: 'none' },
+      update: { scope: 'none' },
+      delete: { scope: 'none' },
+    },
     // health: none
     // users: none
     // audit: none
   },
 
   STUDENT: {
-    // Until Student Portal Phase 6: Default-deny on all student directory, attendance, health, dashboard
+    // Until Student Portal Phase 6: Default-deny on all student directory, attendance, health, dashboard, drives
     students: {
       read: { scope: 'none', notes: 'Deny until Phase 6 student portal' },
       create: { scope: 'none' },
@@ -197,6 +288,33 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
     },
     search: {
       read: { scope: 'all', notes: 'Search training sessions only, no student records' },
+    },
+    companies: {
+      read: { scope: 'none', notes: 'Deny until Phase 6 student portal' },
+      create: { scope: 'none' },
+      update: { scope: 'none' },
+      delete: { scope: 'none' },
+    },
+    drives: {
+      read: { scope: 'none', notes: 'Deny until Phase 6 student portal' },
+      create: { scope: 'none' },
+      update: { scope: 'none' },
+      delete: { scope: 'none' },
+      manage_shortlist: { scope: 'none' },
+      export: { scope: 'none' },
+    },
+    applications: {
+      read: { scope: 'none', notes: 'Deny until Phase 6 student portal' },
+      register: { scope: 'none', notes: 'Deny until Phase 6 student portal' },
+      withdraw: { scope: 'none', notes: 'Deny until Phase 6 student portal' },
+      override: { scope: 'none' },
+      export: { scope: 'none' },
+    },
+    offers: {
+      read: { scope: 'none', notes: 'Deny until Phase 6 student portal' },
+      create: { scope: 'none' },
+      update: { scope: 'none' },
+      delete: { scope: 'none' },
     },
     // health: none
     // users: none

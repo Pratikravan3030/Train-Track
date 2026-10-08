@@ -7,7 +7,7 @@ import {
 export interface StudentOfferSummary {
   _id?: string;
   role: string;
-  companyName: string;
+  companyName?: string;
   type: string;
   ctcLpa?: number | null;
   tier?: OfferTierName | null;

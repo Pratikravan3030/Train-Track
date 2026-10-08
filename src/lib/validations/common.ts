@@ -26,11 +26,8 @@ export interface PaginatedResult<T> {
  * Safely converts empty strings, whitespace, undefined, or null to null BEFORE validation.
  * "0" and 0 strictly stay 0.
  */
-export const nullableNumberPreprocessor = (val: unknown): number | null | undefined => {
-  if (val === undefined) {
-    return undefined;
-  }
-  if (val === '' || val === null) {
+export const nullableNumberPreprocessor = (val: unknown): number | null => {
+  if (val === undefined || val === '' || val === null) {
     return null;
   }
   if (typeof val === 'number') {
@@ -46,4 +43,4 @@ export const nullableNumberPreprocessor = (val: unknown): number | null | undefi
 };
 
 export const nullableNumber = (numberSchema: z.ZodNumber) =>
-  z.preprocess((val) => (val === undefined ? null : nullableNumberPreprocessor(val)), numberSchema.nullable());
+  z.preprocess(nullableNumberPreprocessor, numberSchema.nullable());
