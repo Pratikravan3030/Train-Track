@@ -41,9 +41,13 @@ interface StudentDetailData {
     _id: string;
     name: string;
     rollNumber: string;
-    branch: string;
-    year: string;
-    email: string;
+    department?: string;
+    branch?: string;
+    year?: string;
+    email?: string;
+    passoutYear?: number;
+    cgpa?: number | null;
+    backlogs?: number | null;
   };
   attendance: AttendanceRecord[];
   feedback: FeedbackRecord[];
@@ -198,11 +202,14 @@ export default function StudentDetailPage() {
               <p className="text-xs font-mono text-slate-500 mt-0.5">{student.rollNumber}</p>
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
-                  {student.year}
+                  {student.year || 'Academic Year Unassigned'}
                 </span>
-                {student.branch && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-50 text-slate-700 border border-slate-200">
-                    {student.branch}
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-50 text-slate-700 border border-slate-200">
+                  {student.department || student.branch || 'Unassigned'}
+                </span>
+                {student.passoutYear && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                    Batch {student.passoutYear}
                   </span>
                 )}
               </div>

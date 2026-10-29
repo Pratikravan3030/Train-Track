@@ -47,6 +47,7 @@ export interface IOffer extends Document {
   decisionReason?: string;
   placementStatusSync: IPlacementStatusSync;
   policyOverride?: IPolicyOverride;
+  isDemoData?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -156,6 +157,11 @@ const OfferSchema = new Schema(
       reason: { type: String, trim: true },
       overriddenBy: { type: Schema.Types.ObjectId, ref: 'User' },
       overriddenAt: { type: Date },
+    },
+    isDemoData: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
   },
   {

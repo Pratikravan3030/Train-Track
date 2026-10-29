@@ -47,6 +47,7 @@ export interface IApplication extends Document {
   registeredBy: mongoose.Types.ObjectId; // User who submitted registration (student or staff)
   isLateRegistration?: boolean;
   lateRegistrationReason?: string;
+  isDemoData?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -147,6 +148,11 @@ const ApplicationSchema = new Schema(
     lateRegistrationReason: {
       type: String,
       trim: true,
+    },
+    isDemoData: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
   },
   {

@@ -8,6 +8,7 @@ export interface IFeedback extends Document {
   source: FeedbackSource;
   rating: number;
   comment: string;
+  isDemoData?: boolean;
   createdAt: Date;
 }
 
@@ -23,6 +24,7 @@ const FeedbackSchema: Schema = new Schema({
   },
   rating: { type: Number, required: true, min: 1, max: 5 },
   comment: { type: String, trim: true, default: '' },
+  isDemoData: { type: Boolean, default: false, index: true },
   createdAt: { type: Date, default: Date.now },
 });
 

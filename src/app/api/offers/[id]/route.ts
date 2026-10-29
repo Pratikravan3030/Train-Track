@@ -76,7 +76,10 @@ export async function DELETE(
     await Offer.findByIdAndDelete(id);
 
     // Resynchronize student placement status and cache
-    await syncStudentPlacementStatusFromOffers(studentId);
+    await syncStudentPlacementStatusFromOffers(studentId, {
+      reason: 'Offer record was deleted',
+      userId: auth.user.id,
+    });
 
     await logAudit({
       userId: auth.user.id,

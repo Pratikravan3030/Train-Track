@@ -26,6 +26,7 @@ import {
   DELETE as deleteOfferLetter,
 } from '@/app/api/offers/[id]/letter/route';
 import { GET as exportDriveApplicants } from '@/app/api/drives/[id]/export/route';
+import { POST as registerDriveApplications } from '@/app/api/drives/[id]/applications/route';
 
 // Models
 import User from '@/models/User';
@@ -41,6 +42,7 @@ describe('Phase 4: Shortlist Workflow, Offer Sync, Reversal & Formula-Safe Expor
 
   let tpoSession: { user: AuthContext };
   let coordinatorCseSession: { user: AuthContext };
+  let coordinatorMeSession: { user: AuthContext };
   let studentSession: { user: AuthContext };
 
   let cseStudent1Id: string;
@@ -99,6 +101,27 @@ describe('Phase 4: Shortlist Workflow, Offer Sync, Reversal & Formula-Safe Expor
         name: coordUser.name,
         role: 'DEPT_COORDINATOR',
         department: 'CSE',
+        tokenVersion: 1,
+      },
+    };
+
+    const coordMeUser = await User.create({
+      name: 'ME Coordinator',
+      email: 'coord.me@dypcet.ac.in',
+      role: 'DEPT_COORDINATOR',
+      department: 'ME',
+      password: 'password123',
+      isActive: true,
+      tokenVersion: 1,
+    });
+
+    coordinatorMeSession = {
+      user: {
+        id: coordMeUser._id.toString(),
+        email: coordMeUser.email,
+        name: coordMeUser.name,
+        role: 'DEPT_COORDINATOR',
+        department: 'ME',
         tokenVersion: 1,
       },
     };
@@ -725,6 +748,215 @@ describe('Phase 4: Shortlist Workflow, Offer Sync, Reversal & Formula-Safe Expor
       mockUserSession = studentSession;
       const res = await getOffers(new Request('http://localhost/api/offers'));
       expect(res.status).toBe(403);
+    });
+
+    describe('Phase 4 Review Deliverables: Isolation, Governance & Sync Safeguards', () => {
+      it('Cross-department access: denies ME coordinator from viewing CSE student offer letter (403)', async () => {
+        const offerDoc = await Offer.create({
+          drive: driveId,
+          student: cseStudent1Id,
+          source: 'Campus Drive',
+          companyName: 'Persistent Systems',
+          role: 'SWE',
+          type: 'Full-time',
+          status: 'Accepted',
+          offerLetterStorageKey: 'offer-letters/fake-cse-letter.pdf',
+        });
+
+        mockUserSession = coordinatorMeSession;
+        const res = await getOfferLetter(
+          new Request(`http://localhost/api/offers/${offerDoc._id}/letter`),
+          { params: Promise.resolve({ id: offerDoc._id.toString() }) }
+        );
+        expect(res.status).toBe(403);
+      });
+
+      it('Offer-to-placement sync NEVER overwrites Opted Out, Higher Studies, or Entrepreneurship', async () => {
+        mockUserSession = tpoSession;
+        const statuses = ['Opted Out', 'Higher Studies', 'Entrepreneurship'] as const;
+
+        for (const status of statuses) {
+          const studentDoc = await Student.create({
+            name: `Test ${status} Student`,
+            rollNumber: `STATUS-${status.replace(/\s+/g, '-')}`,
+            department: 'CSE',
+            year: 'Final Year',
+            passoutYear: 2026,
+            placementStatus: status,
+            cgpa: 8.5,
+            backlogs: 0,
+          });
+
+          // Create an accepted qualifying offer for this student
+          const offerRes = await postManualOffer(
+            new Request('http://localhost/api/offers', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                studentId: studentDoc._id.toString(),
+                companyName: 'Cognizant',
+                role: 'Programmer Analyst',
+                type: 'Full-time',
+                ctcLpa: 4.5,
+                status: 'Accepted',
+              }),
+            })
+          );
+          expect(offerRes.status).toBe(201);
+
+          // Verify student status was NOT overwritten
+          const afterSync = await Student.findById(studentDoc._id);
+          expect(afterSync?.placementStatus).toBe(status);
+        }
+      });
+
+      it('Reversing an offer records mandatory reason in placementDetails.reasonForStatusChange when leaving Placed', async () => {
+        mockUserSession = tpoSession;
+        const placedStudent = await Student.create({
+          name: 'Placed Test Candidate',
+          rollNumber: 'PLACED-REV-01',
+          department: 'CSE',
+          year: 'Final Year',
+          passoutYear: 2026,
+          placementStatus: 'Not Placed',
+          cgpa: 8.0,
+          backlogs: 0,
+        });
+
+        // Create accepted offer which moves student to Placed
+        const offerRes = await postManualOffer(
+          new Request('http://localhost/api/offers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              studentId: placedStudent._id.toString(),
+              companyName: 'Wipro Technologies',
+              role: 'Project Engineer',
+              type: 'Full-time',
+              ctcLpa: 6.5,
+              status: 'Accepted',
+            }),
+          })
+        );
+        expect(offerRes.status).toBe(201);
+        const offerData = await offerRes.json();
+
+        const beforeRev = await Student.findById(placedStudent._id);
+        expect(beforeRev?.placementStatus).toBe('Placed');
+
+        // Reverse offer with reason
+        const revReason = 'Candidate failed background verification';
+        const revRes = await reverseOffer(
+          new Request(`http://localhost/api/offers/${offerData._id}/reversal`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 'Revoked',
+              reason: revReason,
+            }),
+          }),
+          { params: Promise.resolve({ id: offerData._id }) }
+        );
+        expect(revRes.status).toBe(200);
+
+        const afterRev = await Student.findById(placedStudent._id);
+        expect(afterRev?.placementStatus).toBe('Not Placed');
+        expect(afterRev?.placementDetails?.reasonForStatusChange).toBe(revReason);
+      });
+
+      it('Bulk register-on-behalf: dedupes studentIds, checks eligibility, and allows staff override with audit trail', async () => {
+        mockUserSession = tpoSession;
+
+        const restrictedDrive = await Drive.create({
+          company: (await Company.findOne({}))!._id,
+          role: 'Specialist Engineer',
+          type: 'Full-time',
+          ctcLpa: 9.0,
+          tier: 'Dream',
+          jd: 'Specialist engineering role description',
+          location: 'Kolhapur',
+          driveDate: new Date(Date.now() + 5 * 86400000),
+          registrationDeadline: new Date(Date.now() + 2 * 86400000),
+          selectionRounds: ['Online Assessment'],
+          status: 'Open',
+          eligibilityRules: {
+            minCgpa: 7.0,
+            maxBacklogs: 0,
+            allowedDepartments: ['CSE'],
+          },
+        });
+
+        // Ineligible student due to CGPA below drive requirement (7.0)
+        const ineligibleStudent = await Student.create({
+          name: 'Ineligible Low CGPA',
+          rollNumber: 'INELIGIBLE-01',
+          department: 'CSE',
+          year: 'Final Year',
+          passoutYear: 2026,
+          placementStatus: 'Not Placed',
+          cgpa: 5.5,
+          backlogs: 0,
+        });
+
+        // 1. Bulk registration with duplicate IDs in array
+        const bulkRes = await registerDriveApplications(
+          new Request(`http://localhost/api/drives/${restrictedDrive._id}/applications`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              studentIds: [
+                cseStudent2Id,
+                cseStudent2Id, // Duplicate in payload
+                ineligibleStudent._id.toString(),
+              ],
+            }),
+          }),
+          { params: Promise.resolve({ id: restrictedDrive._id.toString() }) }
+        );
+        expect(bulkRes.status).toBe(201);
+        const data = await bulkRes.json();
+        expect(data.summary.total).toBe(2); // Deduped to 2 distinct students
+        expect(data.summary.created).toBe(1); // cseStudent2 created
+        expect(data.summary.errors).toBe(1); // ineligibleStudent failed
+
+        // 2. Register ineligible student with explicit overrideReason
+        const overrideReasonText = 'Approved by TPO due to exceptional open-source contributions';
+        const overrideRes = await registerDriveApplications(
+          new Request(`http://localhost/api/drives/${restrictedDrive._id}/applications`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              studentId: ineligibleStudent._id.toString(),
+              overrideReason: overrideReasonText,
+            }),
+          }),
+          { params: Promise.resolve({ id: restrictedDrive._id.toString() }) }
+        );
+        expect(overrideRes.status).toBe(201);
+
+        // Verify audit log exists
+        const auditLog = await AuditLog.findOne({
+          action: 'REGISTER_APPLICANT',
+          'details.studentId': ineligibleStudent._id.toString(),
+          'details.isOverride': true,
+        });
+        expect(auditLog).toBeDefined();
+      });
+
+      it('Denies STUDENT role from drive registration until student portal is enabled (403)', async () => {
+        mockUserSession = studentSession;
+        const res = await registerDriveApplications(
+          new Request(`http://localhost/api/drives/${driveId}/applications`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              studentId: cseStudent1Id,
+            }),
+          }),
+          { params: Promise.resolve({ id: driveId }) }
+        );
+        expect(res.status).toBe(403);
+      });
     });
   });
 });

@@ -965,12 +965,12 @@ export default function StudentsPage() {
 
                       <td className="py-3.5 px-4">
                         <div className="font-bold text-slate-800">
-                          CGPA: {student.cgpa !== undefined ? student.cgpa.toFixed(2) : '—'}
+                          CGPA: {student.cgpa != null ? Number(student.cgpa).toFixed(2) : 'Data incomplete'}
                         </div>
                         <div className={`text-[10px] font-semibold ${
-                          student.backlogs && student.backlogs > 0 ? 'text-amber-600' : 'text-slate-400'
+                          student.backlogs != null && student.backlogs > 0 ? 'text-amber-600' : 'text-slate-400'
                         }`}>
-                          Backlogs: {student.backlogs ?? 0}
+                          Backlogs: {student.backlogs != null ? student.backlogs : 'Data incomplete'}
                         </div>
                       </td>
 

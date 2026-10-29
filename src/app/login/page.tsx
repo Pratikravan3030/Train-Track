@@ -15,12 +15,28 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hasAdmin, setHasAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (status === 'authenticated') {
       router.replace('/');
     }
   }, [status, router]);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch('/api/auth/setup-status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (mounted && typeof data.hasAdmin === 'boolean') {
+          setHasAdmin(data.hasAdmin);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +97,25 @@ export default function LoginPage() {
             Access officer, coordinator, or student dashboard
           </p>
         </div>
+
+        {hasAdmin === false && (
+          <div
+            role="alert"
+            className="flex items-start gap-2.5 p-3.5 mb-5 text-xs text-amber-800 bg-amber-50 rounded-xl border border-amber-200 animate-in fade-in duration-150"
+          >
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+            <div className="space-y-1">
+              <span className="font-bold block">First-Time Setup Required:</span>
+              <span className="text-[11px] leading-relaxed block text-amber-700">
+                No administrator account exists yet. Please run{' '}
+                <code className="px-1 py-0.5 bg-amber-100 font-mono text-[10px] font-bold rounded text-amber-900">
+                  npm run seed:admin
+                </code>{' '}
+                in your terminal to bootstrap the initial Super Administrator.
+              </span>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div

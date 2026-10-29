@@ -112,7 +112,8 @@ export async function POST(
     }
 
     const { studentId, studentIds, lateRegistrationReason, overrideReason } = parseResult.data;
-    const targetStudentIds = studentIds && studentIds.length > 0 ? studentIds : [studentId!];
+    const rawTargetIds = studentIds && studentIds.length > 0 ? studentIds : (studentId ? [studentId] : []);
+    const targetStudentIds = Array.from(new Set(rawTargetIds.map(String)));
 
     await dbConnect();
 

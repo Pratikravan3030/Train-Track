@@ -202,6 +202,16 @@ export async function POST(
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     console.error('[POST /api/students/[id]/resume error]:', message);
+    if (message.includes('STORAGE CONFIGURATION ERROR') || message.includes('Local filesystem storage is disabled')) {
+      return NextResponse.json(
+        {
+          error:
+            'Resume uploads are currently disabled. Cloud storage credentials are missing or unconfigured. Please contact system administrator.',
+          code: 'STORAGE_NOT_CONFIGURED',
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -61,6 +61,13 @@ export const authOptions: NextAuthOptions = {
         const userDoc = await User.findOne({ email });
 
         if (!userDoc) {
+          const adminCount = await User.countDocuments({ role: 'SUPER_ADMIN' });
+          if (adminCount === 0) {
+            throw new Error(
+              'No administrator account exists yet. Please run "npm run seed:admin" in your terminal to bootstrap the system.'
+            );
+          }
+
           await recordFailedAttempt(email, clientIp);
           await logAudit({
             userEmail: email,

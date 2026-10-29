@@ -66,7 +66,10 @@ export async function PUT(
     }
 
     // Synchronize and revert Student placementStatus and placementDetails cache
-    const syncResult = await syncStudentPlacementStatusFromOffers(offer.student);
+    const syncResult = await syncStudentPlacementStatusFromOffers(offer.student, {
+      reason,
+      userId: auth.user.id,
+    });
 
     await logAudit({
       userId: auth.user.id,

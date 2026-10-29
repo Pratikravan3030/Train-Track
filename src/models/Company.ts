@@ -16,6 +16,7 @@ export interface ICompany extends Document {
   preSystemHistory?: string; // Free-text notes for historical visits prior to CampusPlace
   notes?: string;
   isArchived: boolean;
+  isDemoData?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -70,6 +71,11 @@ const CompanySchema = new Schema(
       trim: true,
     },
     isArchived: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    isDemoData: {
       type: Boolean,
       default: false,
       index: true,

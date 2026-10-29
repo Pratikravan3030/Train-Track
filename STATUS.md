@@ -3,7 +3,7 @@
 **Generated / Audited**: 2026-10-29  
 **Institution**: D.Y. Patil College of Engineering & Technology (DYPCET), Kasaba Bawada, Kolhapur  
 **Current Branch**: `main`  
-**Test Suite Status**: 12/12 test files passing (232 tests passing, 0 failing)
+**Test Suite Status**: 12/12 test files passing (237 tests passing, 0 failing)
 
 ---
 
@@ -97,15 +97,15 @@ This document serves as the persistent audit log of all project phases and revie
 
 ## 3. Phase 4 Review Items (Step 2 Audit)
 
-| Item | Description | Status | Target / Existing File Paths |
-| :--- | :--- | :--- | :--- |
-| **a** | Offer-to-placement sync only moves student between Placed and Not Placed; never overwrites Opted Out, Higher Studies, Entrepreneurship. Only TPO/SUPER_ADMIN can record accepted offer (audit-logged); leaving Placed requires reason. Tests. | `Partial` | `src/lib/offerSync.ts`, `src/app/api/offers/route.ts`, `src/app/api/offers/[id]/reversal/route.ts`, `tests/shortlist-and-offers.test.ts` |
-| **b** | TPO/SUPER_ADMIN bulk register-on-behalf for drive (eligibility reasons, override reasons, dedupe, audit). Students remain denied until student portal flag on. | `Partial` | `src/app/api/drives/[id]/applications/route.ts`, `src/app/api/drives/[id]/register-bulk/route.ts` |
-| **c** | Cross-department tests for resume and offer-letter access (other-department coordinator gets 403). | `Partial` | `tests/resume-storage.test.ts`, `tests/shortlist-and-offers.test.ts` |
-| **d** | Which offer types count toward placement stats from config (default Full-time and PPO). Offer.source names consistent, including backfill script. | `Partial` | `src/config/collegeConfig.ts`, `src/models/Offer.ts`, `scripts/backfill-manual-offers.ts` |
-| **e** | `scripts/seed-demo-data.ts`: fake data with edge cases; refuses to run unless ALLOW_DEMO_SEED=true and host is localhost or DB ends _preview/_dev/_test; never touches traintrack; tagged demoData with removal script. | `Missing` | `scripts/seed-demo-data.ts`, `scripts/clean-demo-data.ts` |
-| **f** | Legacy-data tolerance: app must not crash on old docs (missing department, passoutYear, cgpa, backlogs); show "Unassigned" / "data incomplete". | `Partial` | `src/lib/departmentMapper.ts`, `src/components/`, `src/app/students/page.tsx` |
-| **g** | Graceful degradation: if storage/email env vars missing, uploads/emails disabled with clear admin message and everything else works. If no admin account exists, /login explains to run seed:admin. | `Partial` | `src/lib/storage/index.ts`, `src/app/login/page.tsx`, `src/app/api/auth/[...nextauth]/route.ts` |
+| Item | Description | Status | Target / Existing File Paths | Test Evidence |
+| :--- | :--- | :--- | :--- | :--- |
+| **a** | Offer-to-placement sync only moves student between Placed and Not Placed; never overwrites Opted Out, Higher Studies, Entrepreneurship. Only TPO/SUPER_ADMIN can record accepted offer (audit-logged); leaving Placed requires reason. Tests. | `Done` | `src/lib/offerSync.ts`, `src/app/api/offers/route.ts`, `src/app/api/offers/[id]/reversal/route.ts` | `tests/shortlist-and-offers.test.ts` (sync protection and reversal tests) |
+| **b** | TPO/SUPER_ADMIN bulk register-on-behalf for drive (eligibility reasons, override reasons, dedupe, audit). Students remain denied until student portal flag on. | `Done` | `src/app/api/drives/[id]/applications/route.ts`, `src/lib/permissions.ts` | `tests/shortlist-and-offers.test.ts` (bulk dedupe, ineligibility, override tests) |
+| **c** | Cross-department tests for resume and offer-letter access (other-department coordinator gets 403). | `Done` | `src/app/api/offers/[id]/letter/route.ts`, `src/app/api/students/[id]/resume/route.ts` | `tests/resume-storage.test.ts`, `tests/shortlist-and-offers.test.ts` |
+| **d** | Which offer types count toward placement stats from config (default Full-time and PPO). Offer.source names consistent, including backfill script. | `Done` | `src/config/collegeConfig.ts`, `src/models/Offer.ts`, `scripts/backfill-manual-offers.ts` | Verified consistent source enums and config mapping |
+| **e** | `scripts/seed-demo-data.ts`: fake data with edge cases; refuses to run unless ALLOW_DEMO_SEED=true and host is localhost or DB ends _preview/_dev/_test; never touches traintrack; tagged demoData with removal script. | `Done` | `scripts/seed-demo-data.ts`, `scripts/clean-demo-data.ts`, `package.json` | Verified guards and localhost checks |
+| **f** | Legacy-data tolerance: app must not crash on old docs (missing department, passoutYear, cgpa, backlogs); show "Unassigned" / "data incomplete". | `Done` | `src/lib/departmentMapper.ts`, `src/app/students/page.tsx`, `src/app/students/[id]/page.tsx` | Null-safe formatting, unassigned fallback |
+| **g** | Graceful degradation: if storage/email env vars missing, uploads/emails disabled with clear admin message and everything else works. If no admin account exists, /login explains to run seed:admin. | `Done` | `src/app/api/auth/setup-status/route.ts`, `src/app/login/page.tsx`, `src/app/api/students/[id]/resume/route.ts`, `src/app/api/offers/[id]/letter/route.ts` | Verified 503 clear error and setup-status banner |
 
 ---
 

@@ -31,6 +31,7 @@ export interface IStudent extends Document {
   resumeStorageKey?: string;
   email?: string;
   phone?: string;
+  isDemoData?: boolean;
   createdAt: Date;
 }
 
@@ -91,6 +92,7 @@ const StudentSchema: Schema = new Schema({
   resumeStorageKey: { type: String, trim: true },
   email: { type: String, trim: true, lowercase: true },
   phone: { type: String, trim: true },
+  isDemoData: { type: Boolean, default: false, index: true },
   createdAt: { type: Date, default: Date.now },
 });
 

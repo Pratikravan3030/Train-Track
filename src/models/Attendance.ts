@@ -5,6 +5,7 @@ export interface IAttendance extends Document {
   studentId: mongoose.Types.ObjectId;
   present: boolean;
   markedAt: Date;
+  isDemoData?: boolean;
 }
 
 const AttendanceSchema: Schema = new Schema({
@@ -12,6 +13,7 @@ const AttendanceSchema: Schema = new Schema({
   studentId: { type: Schema.Types.ObjectId, ref: 'Student', required: true },
   present: { type: Boolean, required: true },
   markedAt: { type: Date, default: Date.now },
+  isDemoData: { type: Boolean, default: false, index: true },
 });
 
 // Enforce unique session + student combo

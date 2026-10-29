@@ -5,6 +5,7 @@ export interface ITrainingSession extends Document {
   date: Date;
   trainer: string;
   description: string;
+  isDemoData?: boolean;
   createdAt: Date;
 }
 
@@ -13,6 +14,7 @@ const TrainingSessionSchema: Schema = new Schema({
   date: { type: Date, required: true },
   trainer: { type: String },
   description: { type: String },
+  isDemoData: { type: Boolean, default: false, index: true },
   createdAt: { type: Date, default: Date.now },
 });
 

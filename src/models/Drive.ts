@@ -38,6 +38,7 @@ export interface IDrive extends Document {
   eligibilityRules: IDriveEligibilityRules;
   status: DriveStatus;
   isArchived: boolean;
+  isDemoData?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -147,6 +148,11 @@ const DriveSchema = new Schema(
       index: true,
     },
     isArchived: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    isDemoData: {
       type: Boolean,
       default: false,
       index: true,
