@@ -40,5 +40,10 @@
     "tsx": "^4.23.1",
     "typescript": "^5",
     "vitest": "^3.2.7"
+  },
+  "config": {
+    "mongodbMemoryServer": {
+      "systemBinary": "/opt/homebrew/bin/mongod"
+    }
   }
 }
