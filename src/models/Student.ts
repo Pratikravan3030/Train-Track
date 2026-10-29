@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Query } from 'mongoose';
 import {
   DEPARTMENT_CODES,
   DepartmentCode,
@@ -31,6 +31,9 @@ export interface IStudent extends Document {
   resumeStorageKey?: string;
   email?: string;
   phone?: string;
+  isDeleted?: boolean;
+  deletedAt?: Date | null;
+  deletedBy?: mongoose.Types.ObjectId | null;
   isDemoData?: boolean;
   createdAt: Date;
 }
@@ -92,8 +95,25 @@ const StudentSchema: Schema = new Schema({
   resumeStorageKey: { type: String, trim: true },
   email: { type: String, trim: true, lowercase: true },
   phone: { type: String, trim: true },
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null },
+  deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   isDemoData: { type: Boolean, default: false, index: true },
   createdAt: { type: Date, default: Date.now },
+});
+
+// Soft delete query filter middleware
+StudentSchema.pre(/^find/, function (this: Query<unknown, IStudent>) {
+  const filter = this.getFilter();
+  if (filter.isDeleted === undefined) {
+    this.where({ isDeleted: { $ne: true } });
+  }
+});
+StudentSchema.pre('countDocuments', function (this: Query<unknown, IStudent>) {
+  const filter = this.getFilter();
+  if (filter.isDeleted === undefined) {
+    this.where({ isDeleted: { $ne: true } });
+  }
 });
 
 // Compound indexes for high-throughput batch and department queries

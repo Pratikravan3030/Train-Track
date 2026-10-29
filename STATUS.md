@@ -121,11 +121,11 @@ This document serves as the persistent audit log of all project phases and revie
 - **NPM Audit**: `Done` (resolved 9 vulnerabilities, remaining reduced to dev tooling)
 
 ### Phase 7 Core & Step 3.2
-- Placement and training reports with multi-criteria filters & definitions: `Missing`
-- CSV and Excel export (`exceljs`, formula-injection safe): `Missing`
-- Soft delete (`isDeleted: true`, `deletedAt`, `deletedBy`) with SUPER_ADMIN restore: `Missing`
-- Audit log viewer UI for SUPER_ADMIN: `Missing` (`src/app/admin/audit-logs/page.tsx`)
-- Year-rollover tool (dry-run first, archive): `Missing` (`scripts/year-rollover.ts`)
+- **Placement and Training Reports with Multi-Criteria Filters & On-Screen Definitions**: `Done` (`src/app/reports/page.tsx`, `src/app/api/reports/placement/route.ts`, `src/app/api/reports/training/route.ts`; test evidence: `tests/phase7-reports-and-softdelete.test.ts`)
+- **CSV and Excel Export (`exceljs`, Formula-Injection Safe)**: `Done` (`src/lib/excel.ts`, `src/lib/csv.ts`, downloads `.xlsx` and `.csv` with formula sanitization; test evidence: `tests/phase7-reports-and-softdelete.test.ts`)
+- **Soft Delete (`isDeleted`, `deletedAt`, `deletedBy`) with SUPER_ADMIN Restore**: `Done` (Added to `Student`, `TrainingSession`, `Company`, `Drive`; Mongoose pre-find/count middleware excludes deleted by default; restore endpoints: `POST /api/students/[id]/restore`, `POST /api/sessions/[id]/restore`, `POST /api/companies/[id]/restore`, `POST /api/drives/[id]/restore`; test evidence: `tests/phase7-reports-and-softdelete.test.ts`)
+- **Audit Log Viewer UI for SUPER_ADMIN**: `Done` (`src/app/admin/audit-logs/page.tsx`, `src/app/api/admin/audit-logs/route.ts` with pagination, filters, and JSON modal; test evidence: `tests/phase7-reports-and-softdelete.test.ts`)
+- **Year-Rollover Tool (Dry-Run First, Archive Not Delete)**: `Done` (`scripts/year-rollover.ts`, npm script `"rollover"`, localhost & remote guard, traintrack protection, preserves all student cohorts and offer histories)
 
 ### Phase 5 Staff-Side Training Upgrade & Step 3.3
 - Training categories & target groups: `Missing`

@@ -120,13 +120,13 @@ export async function DELETE(
     const { id } = await params;
     await dbConnect();
 
-    const company = await Company.findById(id);
+    const company = await Company.findOne({ _id: id, isDeleted: { $ne: true } });
     if (!company) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
 
-    // Check if drives exist for this company
-    const drivesCount = await Drive.countDocuments({ company: id });
+    // Check if non-deleted drives exist for this company
+    const drivesCount = await Drive.countDocuments({ company: id, isDeleted: { $ne: true } });
     if (drivesCount > 0) {
       return NextResponse.json(
         {
@@ -136,7 +136,11 @@ export async function DELETE(
       );
     }
 
-    await Company.findByIdAndDelete(id);
+    // Soft delete: flag record
+    company.isDeleted = true;
+    company.deletedAt = new Date();
+    company.deletedBy = auth.user.id;
+    await company.save();
 
     await logAudit({
       userId: auth.user.id,
@@ -145,10 +149,10 @@ export async function DELETE(
       action: 'DELETE_COMPANY',
       resource: 'Company',
       resourceId: id,
-      details: { name: company.name },
+      details: { name: company.name, softDelete: true },
     });
 
-    return NextResponse.json({ message: 'Company deleted successfully' });
+    return NextResponse.json({ message: 'Company soft deleted successfully' });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     console.error('[DELETE /api/companies/[id] error]:', message);

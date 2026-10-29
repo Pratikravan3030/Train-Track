@@ -243,12 +243,18 @@ export async function DELETE(
     const { id } = await params;
 
     await dbConnect();
-    const deletedStudent = await Student.findByIdAndDelete(id);
-    if (!deletedStudent) {
+    const student = await Student.findOne({ _id: id, isDeleted: { $ne: true } });
+    if (!student) {
       return NextResponse.json({ error: 'Student record not found' }, { status: 404 });
     }
 
-    // Cascade delete attendance and feedback
+    // Soft delete: flag record, record deletion metadata
+    student.isDeleted = true;
+    student.deletedAt = new Date();
+    student.deletedBy = auth.user.id;
+    await student.save();
+
+    // Clean up associated attendance and feedback records
     await Promise.all([
       Attendance.deleteMany({ studentId: id }),
       Feedback.deleteMany({ studentId: id }),
@@ -261,10 +267,10 @@ export async function DELETE(
       action: 'DELETE_STUDENT',
       resource: 'Student',
       resourceId: id,
-      details: { rollNumber: deletedStudent.rollNumber, name: deletedStudent.name },
+      details: { rollNumber: student.rollNumber, name: student.name, softDelete: true },
     });
 
-    return NextResponse.json({ message: 'Student and related records deleted successfully' }, { status: 200 });
+    return NextResponse.json({ message: 'Student soft deleted successfully' }, { status: 200 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     console.error('[DELETE /api/students/[id] error]:', message);

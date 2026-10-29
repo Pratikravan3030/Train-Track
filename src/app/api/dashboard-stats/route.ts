@@ -33,7 +33,9 @@ export async function GET(request: Request) {
     const coordinatorDept = isDeptCoordinator ? auth.user.department : null;
 
     // Student scope & batch filter
-    const studentFilter: Record<string, unknown> = {};
+    const studentFilter: Record<string, unknown> = {
+      isDeleted: { $ne: true },
+    };
     if (coordinatorDept) {
       studentFilter.department = coordinatorDept;
     }

@@ -21,13 +21,15 @@ export type Resource =
   | 'companies'
   | 'drives'
   | 'applications'
-  | 'offers';
+  | 'offers'
+  | 'reports';
 
 export type Action =
   | 'read'
   | 'create'
   | 'update'
   | 'delete'
+  | 'restore'
   | 'update_placement'
   | 'export'
   | 'import'
@@ -56,6 +58,7 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
       create: { scope: 'all' },
       update: { scope: 'all' },
       delete: { scope: 'all' },
+      restore: { scope: 'all' },
       update_placement: { scope: 'all' },
       export: { scope: 'all' },
       import: { scope: 'all' },
@@ -65,6 +68,7 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
       create: { scope: 'all' },
       update: { scope: 'all' },
       delete: { scope: 'all' },
+      restore: { scope: 'all' },
     },
     attendance: {
       read: { scope: 'all' },
@@ -100,12 +104,14 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
       create: { scope: 'all' },
       update: { scope: 'all' },
       delete: { scope: 'all' },
+      restore: { scope: 'all' },
     },
     drives: {
       read: { scope: 'all' },
       create: { scope: 'all' },
       update: { scope: 'all' },
       delete: { scope: 'all' },
+      restore: { scope: 'all' },
       manage_shortlist: { scope: 'all' },
       export: { scope: 'all' },
     },
@@ -122,6 +128,10 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
       update: { scope: 'all' },
       delete: { scope: 'all' },
       override: { scope: 'all' },
+    },
+    reports: {
+      read: { scope: 'all' },
+      export: { scope: 'all' },
     },
   },
 
@@ -183,6 +193,10 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
       update: { scope: 'all' },
       delete: { scope: 'all' },
       override: { scope: 'all' },
+    },
+    reports: {
+      read: { scope: 'all' },
+      export: { scope: 'all' },
     },
     // health: none (SUPER_ADMIN only)
     // users: none
@@ -248,6 +262,10 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
       create: { scope: 'none' },
       update: { scope: 'none' },
       delete: { scope: 'none' },
+    },
+    reports: {
+      read: { scope: 'own-department' },
+      export: { scope: 'own-department' },
     },
     // health: none
     // users: none

@@ -162,16 +162,16 @@ export async function DELETE(
     const { id } = await params;
     await dbConnect();
 
-    const deletedSession = await TrainingSession.findByIdAndDelete(id);
-    if (!deletedSession) {
+    const session = await TrainingSession.findOne({ _id: id, isDeleted: { $ne: true } });
+    if (!session) {
       return NextResponse.json({ error: 'Training session not found' }, { status: 404 });
     }
 
-    // Cascade delete attendance and feedback for this session
-    await Promise.all([
-      Attendance.deleteMany({ sessionId: id }),
-      Feedback.deleteMany({ sessionId: id }),
-    ]);
+    // Soft delete: flag record, preserve relational attendance/feedback for restore
+    session.isDeleted = true;
+    session.deletedAt = new Date();
+    session.deletedBy = auth.user.id;
+    await session.save();
 
     await logAudit({
       userId: auth.user.id,
@@ -180,10 +180,10 @@ export async function DELETE(
       action: 'DELETE_SESSION',
       resource: 'TrainingSession',
       resourceId: id,
-      details: { title: deletedSession.title },
+      details: { title: session.title, softDelete: true },
     });
 
-    return NextResponse.json({ message: 'Session and related records deleted successfully' }, { status: 200 });
+    return NextResponse.json({ message: 'Session soft deleted successfully' }, { status: 200 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     console.error('[DELETE /api/sessions/[id] error]:', message);

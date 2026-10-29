@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Query } from 'mongoose';
 
 export interface IHRContact {
   name: string;
@@ -16,6 +16,9 @@ export interface ICompany extends Document {
   preSystemHistory?: string; // Free-text notes for historical visits prior to CampusPlace
   notes?: string;
   isArchived: boolean;
+  isDeleted?: boolean;
+  deletedAt?: Date | null;
+  deletedBy?: mongoose.Types.ObjectId | null;
   isDemoData?: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -75,6 +78,20 @@ const CompanySchema = new Schema(
       default: false,
       index: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
     isDemoData: {
       type: Boolean,
       default: false,
@@ -85,6 +102,20 @@ const CompanySchema = new Schema(
     timestamps: true,
   }
 );
+
+// Soft delete query filter middleware
+CompanySchema.pre(/^find/, function (this: Query<unknown, ICompany>) {
+  const filter = this.getFilter();
+  if (filter.isDeleted === undefined) {
+    this.where({ isDeleted: { $ne: true } });
+  }
+});
+CompanySchema.pre('countDocuments', function (this: Query<unknown, ICompany>) {
+  const filter = this.getFilter();
+  if (filter.isDeleted === undefined) {
+    this.where({ isDeleted: { $ne: true } });
+  }
+});
 
 // Pre-validate hook to sync normalizedName
 CompanySchema.pre('validate', function () {

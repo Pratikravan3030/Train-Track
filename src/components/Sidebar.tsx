@@ -13,7 +13,9 @@ import {
   ShieldCheck,
   Building2,
   Briefcase,
-  Award
+  Award,
+  BarChart3,
+  ScrollText
 } from 'lucide-react';
 import { COLLEGE_CONFIG } from '@/config/collegeConfig';
 import { CollegeLogo } from './ui/CollegeLogo';
@@ -42,8 +44,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: 'Offers & Outcomes', href: '/offers', icon: Award },
         { name: 'Training Sessions', href: '/sessions', icon: Calendar },
         { name: 'Feedback Logs', href: '/feedback', icon: MessageSquare },
+        { name: 'Reports & Analytics', href: '/reports', icon: BarChart3 },
         ...(session?.user?.role === 'SUPER_ADMIN'
-          ? [{ name: 'User Accounts', href: '/admin/users', icon: ShieldCheck }]
+          ? [
+              { name: 'User Accounts', href: '/admin/users', icon: ShieldCheck },
+              { name: 'Audit Logs', href: '/admin/audit-logs', icon: ScrollText },
+            ]
           : []),
       ];
 

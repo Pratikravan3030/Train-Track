@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Query } from 'mongoose';
 import {
   DRIVE_TYPES,
   DriveType,
@@ -38,6 +38,9 @@ export interface IDrive extends Document {
   eligibilityRules: IDriveEligibilityRules;
   status: DriveStatus;
   isArchived: boolean;
+  isDeleted?: boolean;
+  deletedAt?: Date | null;
+  deletedBy?: mongoose.Types.ObjectId | null;
   isDemoData?: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -152,6 +155,20 @@ const DriveSchema = new Schema(
       default: false,
       index: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
     isDemoData: {
       type: Boolean,
       default: false,
@@ -162,6 +179,20 @@ const DriveSchema = new Schema(
     timestamps: true,
   }
 );
+
+// Soft delete query filter middleware
+DriveSchema.pre(/^find/, function (this: Query<unknown, IDrive>) {
+  const filter = this.getFilter();
+  if (filter.isDeleted === undefined) {
+    this.where({ isDeleted: { $ne: true } });
+  }
+});
+DriveSchema.pre('countDocuments', function (this: Query<unknown, IDrive>) {
+  const filter = this.getFilter();
+  if (filter.isDeleted === undefined) {
+    this.where({ isDeleted: { $ne: true } });
+  }
+});
 
 DriveSchema.index({ status: 1, isArchived: 1 });
 DriveSchema.index({ 'eligibilityRules.allowedBatches': 1 });

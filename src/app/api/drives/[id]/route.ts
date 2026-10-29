@@ -142,7 +142,7 @@ export async function DELETE(
     const { id } = await params;
     await dbConnect();
 
-    const drive = await Drive.findById(id);
+    const drive = await Drive.findOne({ _id: id, isDeleted: { $ne: true } });
     if (!drive) {
       return NextResponse.json({ error: 'Drive not found' }, { status: 404 });
     }
@@ -157,7 +157,11 @@ export async function DELETE(
       );
     }
 
-    await Drive.findByIdAndDelete(id);
+    // Soft delete: flag record
+    drive.isDeleted = true;
+    drive.deletedAt = new Date();
+    drive.deletedBy = auth.user.id;
+    await drive.save();
 
     await logAudit({
       userId: auth.user.id,
@@ -166,10 +170,10 @@ export async function DELETE(
       action: 'DELETE_DRIVE',
       resource: 'Drive',
       resourceId: id,
-      details: { role: drive.role, company: drive.company?.toString() },
+      details: { role: drive.role, company: drive.company?.toString(), softDelete: true },
     });
 
-    return NextResponse.json({ message: 'Drive deleted successfully' });
+    return NextResponse.json({ message: 'Drive soft deleted successfully' });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     console.error('[DELETE /api/drives/[id] error]:', message);
