@@ -43,3 +43,8 @@ next-env.d.ts
 # uploads
 /uploads
 
+# backups
+/backups
+*.backup.json
+
+

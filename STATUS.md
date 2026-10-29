@@ -3,7 +3,7 @@
 **Generated / Audited**: 2026-10-29  
 **Institution**: D.Y. Patil College of Engineering & Technology (DYPCET), Kasaba Bawada, Kolhapur  
 **Current Branch**: `main`  
-**Test Suite Status**: 12/12 test files passing (237 tests passing, 0 failing)
+**Test Suite Status**: 13/13 test files passing (245 tests passing, 0 failing)
 
 ---
 
@@ -112,12 +112,13 @@ This document serves as the persistent audit log of all project phases and revie
 ## 4. Remaining Phases (Phases 5–8)
 
 ### Launch Hardening & Step 3.1
-- Security headers & CSP: `Missing` (in `next.config.ts` / middleware)
-- Error boundaries & 404/500 pages: `Missing` (`src/app/error.tsx`, `src/app/not-found.tsx`, `src/app/global-error.tsx`)
-- Health endpoint for operational checks: `Partial` (`src/app/api/health/route.ts` exists for SUPER_ADMIN, needs general liveness/readiness)
-- GitHub Actions CI workflow (lint, test, build): `Missing` (`.github/workflows/ci.yml`)
-- Checked Mongoose collection indexes: `Partial` (Needs automated index verification)
-- Admin JSON export backup script: `Missing` (`scripts/export-backup.ts`)
+- **Security Headers & CSP**: `Done` (`next.config.ts` headers: CSP, X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy, Permissions-Policy without geolocation, HSTS)
+- **Error Boundaries & 404/500 Pages**: `Done` (`src/app/not-found.tsx`, `src/app/error.tsx`, `src/app/global-error.tsx`)
+- **Health Diagnostics Endpoint**: `Done` (`src/app/api/health/route.ts` - SUPER_ADMIN scoped)
+- **GitHub Actions CI Workflow**: `Done` (`.github/workflows/ci.yml` - lint, test, build with Node 20 & MongoDB service)
+- **Checked Indexes Verification**: `Done` (`tests/indexes.test.ts` - compound & unique indexes on Student, Company, Drive, Application, Offer, Attendance, Feedback, User)
+- **Read-Only JSON Backup Export**: `Done` (`scripts/export-backup.ts` with local host guard, traintrack protection, password redaction, gitignored `./backups`)
+- **NPM Audit**: `Done` (resolved 9 vulnerabilities, remaining reduced to dev tooling)
 
 ### Phase 7 Core & Step 3.2
 - Placement and training reports with multi-criteria filters & definitions: `Missing`

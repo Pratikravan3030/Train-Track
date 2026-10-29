@@ -13,6 +13,7 @@
     "seed:admin": "tsx scripts/seed-admin.ts",
     "seed:demo": "tsx scripts/seed-demo-data.ts",
     "clean:demo": "tsx scripts/clean-demo-data.ts",
+    "export:backup": "tsx scripts/export-backup.ts",
     "migrate:departments": "tsx scripts/migrate-department-codes.ts --apply",
     "migrate:departments:dry-run": "tsx scripts/migrate-department-codes.ts"
   },
