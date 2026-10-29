@@ -115,18 +115,12 @@ export async function PUT(
       return NextResponse.json({ error: firstError, details: parseResult.error.format() }, { status: 400 });
     }
 
-    const { title, date, trainer, description } = parseResult.data;
     await dbConnect();
 
     const updatedSession = await TrainingSession.findByIdAndUpdate(
       id,
-      {
-        ...(title && { title }),
-        ...(date && { date }),
-        ...(trainer && { trainer }),
-        ...(description !== undefined && { description }),
-      },
-      { new: true, runValidators: true }
+      { $set: parseResult.data },
+      { returnDocument: 'after', runValidators: true }
     );
 
     if (!updatedSession) {

@@ -449,6 +449,7 @@ describe('Phase 7: Soft Delete, Restore, Audit Log Viewer, and Reports & Exports
       expect(meReport.summary.placedStudentsCount).toBe(0);
 
       // CSE Coordinator attempts to query ME department -> 403 Forbidden
+      mockUserSession = cseCoordinatorSession;
       const forbiddenReq = new Request('http://localhost:3000/api/reports/placement?batch=2026&department=ME');
       const forbiddenRes = await getPlacementReport(forbiddenReq);
       expect(forbiddenRes.status).toBe(403);

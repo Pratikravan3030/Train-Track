@@ -98,13 +98,25 @@ export async function POST(request: Request) {
     }
 
     // Prepare bulk operations for upserting attendance records
-    const bulkOps = records.map((record) => ({
-      updateOne: {
-        filter: { sessionId, studentId: record.studentId },
-        update: { $set: { present: record.present, markedAt: new Date() } },
-        upsert: true,
-      },
-    }));
+    const bulkOps = records.map((record) => {
+      const status = record.status || (record.present ? 'Present' : 'Absent');
+      const present = status === 'Present' || status === 'Late';
+      return {
+        updateOne: {
+          filter: { sessionId, studentId: record.studentId },
+          update: {
+            $set: {
+              present,
+              status,
+              remarks: record.remarks,
+              markedBy: auth.user.id,
+              markedAt: new Date(),
+            },
+          },
+          upsert: true,
+        },
+      };
+    });
 
     if (bulkOps.length > 0) {
       await Attendance.bulkWrite(bulkOps);

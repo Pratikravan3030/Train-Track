@@ -16,6 +16,17 @@ export type UserRole = (typeof COLLEGE_ROLES)[number];
 export const DEPARTMENT_CODES = ['CSE', 'IT', 'ECE', 'EE', 'ME', 'CE', 'OTHER'] as const;
 export type DepartmentCode = (typeof DEPARTMENT_CODES)[number];
 
+export const TRAINING_CATEGORIES = [
+  'Technical',
+  'Aptitude',
+  'Soft Skills',
+  'Domain-Specific',
+  'Mock Interview',
+  'Other',
+] as const;
+export type TrainingCategory = (typeof TRAINING_CATEGORIES)[number];
+export const SESSION_CATEGORIES = TRAINING_CATEGORIES;
+
 export function isConfigured(value?: string | null): boolean {
   if (!value) return false;
   const trimmed = value.trim();

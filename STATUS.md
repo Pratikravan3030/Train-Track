@@ -128,10 +128,11 @@ This document serves as the persistent audit log of all project phases and revie
 - **Year-Rollover Tool (Dry-Run First, Archive Not Delete)**: `Done` (`scripts/year-rollover.ts`, npm script `"rollover"`, localhost & remote guard, traintrack protection, preserves all student cohorts and offer histories)
 
 ### Phase 5 Staff-Side Training Upgrade & Step 3.3
-- Training categories & target groups: `Missing`
-- Attendance statuses (Present, Absent, Late, Excused) and attendance %: `Missing`
-- Defaulter list calculation: `Missing`
-- Trainer analytics & Assessment module with CSV score import: `Missing`
+- **Training categories & target groups**: `Done` (`TRAINING_CATEGORIES` in `src/config/collegeConfig.ts`, `TrainingSession.ts` schema with category, `targetDepartments`, `targetBatches`, `venue`; filtered query support in `GET /api/sessions`; UI category pills and form inputs in `src/app/sessions/page.tsx`; test evidence: `tests/phase5-training-upgrade.test.ts`)
+- **Attendance statuses (Present, Absent, Late, Excused) and attendance %**: `Done` (`Attendance.ts` schema enum, pre-validate sync hook, `POST /api/attendance` granular logging with `remarks` and `markedBy`; dynamic attendance % header on `src/app/sessions/[id]/page.tsx`; test evidence: `tests/phase5-training-upgrade.test.ts`)
+- **Defaulter list calculation**: `Done` (`GET /api/sessions/defaulters` with threshold filter, formula-safe CSV export, interactive modal on `src/app/sessions/page.tsx`; test evidence: `tests/phase5-training-upgrade.test.ts`)
+- **Trainer analytics & Assessment module with CSV score import**: `Done` (`GET /api/sessions/analytics`, trainer performance modal on `src/app/sessions/page.tsx`; `Assessment.ts` schema, `GET /api/sessions/[id]/assessments`, `POST /api/sessions/[id]/assessments/import` with roll number matching and pass/fail calculation, UI assessments roster and import modal on `src/app/sessions/[id]/page.tsx`; test evidence: `tests/phase5-training-upgrade.test.ts`)
+- **Time-limited check-in code**: `Done` (`POST /api/sessions/[id]/check-in-code` generates 6-char alphanumeric code valid for 15 minutes; interactive generator & copy UI on `src/app/sessions/[id]/page.tsx`; zero geolocation collection; test evidence: `tests/phase5-training-upgrade.test.ts`)
 
 ### Phase 3b Profile Extensions & Step 3.4
 - Comprehensive schema extensions in `Student.ts`: `Missing`

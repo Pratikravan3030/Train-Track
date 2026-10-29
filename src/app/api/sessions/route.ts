@@ -20,20 +20,44 @@ export async function GET(request: Request) {
       );
     }
 
-    const { page, limit, search, sortBy = 'date', sortOrder = 'desc', all } = parsedQuery.data;
+    const { page, limit, search, sortBy = 'date', sortOrder = 'desc', all, category, department, batch } = parsedQuery.data;
 
     await dbConnect();
 
-    const filter: Record<string, unknown> = {};
+    const andConditions: Record<string, unknown>[] = [];
 
     if (search) {
       const searchRegex = { $regex: search, $options: 'i' };
-      filter.$or = [
-        { title: searchRegex },
-        { trainer: searchRegex },
-        { description: searchRegex },
-      ];
+      andConditions.push({
+        $or: [
+          { title: searchRegex },
+          { trainer: searchRegex },
+          { description: searchRegex },
+        ],
+      });
     }
+
+    if (category && category !== 'all') {
+      andConditions.push({ category });
+    }
+
+    if (department && department !== 'all') {
+      andConditions.push({
+        $or: [{ targetDepartments: department }, { targetDepartments: { $size: 0 } }],
+      });
+    }
+
+    if (batch && batch !== 'all') {
+      const bYear = parseInt(batch, 10);
+      if (!isNaN(bYear)) {
+        andConditions.push({
+          $or: [{ targetBatches: bYear }, { targetBatches: { $size: 0 } }],
+        });
+      }
+    }
+
+    const filter: Record<string, unknown> =
+      andConditions.length > 0 ? { $and: andConditions } : {};
 
     if (all === 'true') {
       const allSessions = await TrainingSession.find(filter).sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 });
@@ -96,15 +120,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: firstError, details: parseResult.error.format() }, { status: 400 });
     }
 
-    const { title, date, trainer, description } = parseResult.data;
-
     await dbConnect();
 
     const newSession = await TrainingSession.create({
-      title,
-      date,
-      trainer,
-      description: description || '',
+      ...parseResult.data,
+      description: parseResult.data.description || '',
     });
 
     await logAudit({
@@ -114,7 +134,7 @@ export async function POST(request: Request) {
       action: 'CREATE_SESSION',
       resource: 'TrainingSession',
       resourceId: newSession._id.toString(),
-      details: { title, trainer },
+      details: { title: parseResult.data.title, trainer: parseResult.data.trainer, category: parseResult.data.category },
     });
 
     return NextResponse.json(newSession, { status: 201 });

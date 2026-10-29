@@ -22,7 +22,8 @@ export type Resource =
   | 'drives'
   | 'applications'
   | 'offers'
-  | 'reports';
+  | 'reports'
+  | 'assessments';
 
 export type Action =
   | 'read'
@@ -133,6 +134,13 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
       read: { scope: 'all' },
       export: { scope: 'all' },
     },
+    assessments: {
+      read: { scope: 'all' },
+      create: { scope: 'all' },
+      update: { scope: 'all' },
+      delete: { scope: 'all' },
+      import: { scope: 'all' },
+    },
   },
 
   TPO: {
@@ -197,6 +205,13 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
     reports: {
       read: { scope: 'all' },
       export: { scope: 'all' },
+    },
+    assessments: {
+      read: { scope: 'all' },
+      create: { scope: 'all' },
+      update: { scope: 'all' },
+      delete: { scope: 'all' },
+      import: { scope: 'all' },
     },
     // health: none (SUPER_ADMIN only)
     // users: none
@@ -266,6 +281,13 @@ export const PERMISSION_MATRIX: PermissionPolicy = {
     reports: {
       read: { scope: 'own-department' },
       export: { scope: 'own-department' },
+    },
+    assessments: {
+      read: { scope: 'own-department' },
+      create: { scope: 'none' },
+      update: { scope: 'none' },
+      delete: { scope: 'none' },
+      import: { scope: 'none' },
     },
     // health: none
     // users: none

@@ -1,8 +1,11 @@
 import { z } from 'zod';
+import { ATTENDANCE_STATUSES } from '@/models/Attendance';
 
 export const attendanceRecordItemSchema = z.object({
   studentId: z.string().trim().min(1, 'Student ID is required'),
-  present: z.boolean(),
+  present: z.boolean().optional(),
+  status: z.enum(ATTENDANCE_STATUSES).optional(),
+  remarks: z.string().trim().optional(),
 });
 
 export const saveAttendanceSchema = z.object({
