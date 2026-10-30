@@ -27,6 +27,10 @@ export const TRAINING_CATEGORIES = [
 export type TrainingCategory = (typeof TRAINING_CATEGORIES)[number];
 export const SESSION_CATEGORIES = TRAINING_CATEGORIES;
 
+export function isStudentPortalEnabled(): boolean {
+  return process.env.STUDENT_PORTAL_ENABLED === 'true';
+}
+
 export function isConfigured(value?: string | null): boolean {
   if (!value) return false;
   const trimmed = value.trim();

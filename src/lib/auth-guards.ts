@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { UserRole } from '@/config/collegeConfig';
+import { UserRole, isStudentPortalEnabled } from '@/config/collegeConfig';
 import { Resource, Action, PermissionScope, getPermission } from '@/lib/permissions';
 import { mapToDepartmentCode } from '@/lib/departmentMapper';
 import dbConnect from '@/lib/db';
@@ -42,6 +42,17 @@ async function validateUserSession(
   sessionUser: AuthContext,
   options?: GuardOptions
 ): Promise<{ valid: true; user: AuthContext } | { valid: false; response: NextResponse }> {
+  // Global feature flag check: When student portal is disabled, student sessions are rejected with 403
+  if (sessionUser.role === 'STUDENT' && !isStudentPortalEnabled()) {
+    return {
+      valid: false,
+      response: NextResponse.json(
+        { error: 'Student portal is currently disabled. Please contact the Training & Placement Cell.' },
+        { status: 403 }
+      ),
+    };
+  }
+
   // If user has an identifier, verify against MongoDB
   if (sessionUser.id) {
     try {
@@ -260,4 +271,61 @@ export function canAccessDepartment(user: AuthContext, departmentName?: string):
     return user.department?.trim().toLowerCase() === departmentName.trim().toLowerCase();
   }
   return false;
+}
+
+/**
+ * Guard restricted strictly to students accessing their self-service portal.
+ * Enforces:
+ * 1. STUDENT_PORTAL_ENABLED feature flag (403 if disabled)
+ * 2. Authenticated session exists (401 if not)
+ * 3. Role is STUDENT and linked to a valid studentId (403 if not)
+ */
+export async function requireStudentAuth(
+  options?: GuardOptions
+): Promise<
+  | { authorized: true; user: AuthContext & { studentId: string } }
+  | { authorized: false; response: NextResponse }
+> {
+  if (!isStudentPortalEnabled()) {
+    return {
+      authorized: false,
+      response: NextResponse.json(
+        { error: 'Student portal is currently disabled. Please contact the Training & Placement Cell.' },
+        { status: 403 }
+      ),
+    };
+  }
+
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return {
+      authorized: false,
+      response: NextResponse.json(
+        { error: 'Unauthorized. Please sign in to access the student portal.' },
+        { status: 401 }
+      ),
+    };
+  }
+
+  const sessionUser = session.user as AuthContext;
+  const validation = await validateUserSession(sessionUser, options);
+  if (!validation.valid) {
+    return { authorized: false, response: validation.response };
+  }
+
+  const user = validation.user;
+  if (user.role !== 'STUDENT' || !user.studentId) {
+    return {
+      authorized: false,
+      response: NextResponse.json(
+        { error: 'Forbidden. This portal is restricted to enrolled students with active records.' },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return {
+    authorized: true,
+    user: user as AuthContext & { studentId: string },
+  };
 }

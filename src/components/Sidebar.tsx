@@ -34,7 +34,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const navItems = isStudent
     ? [
-        { name: 'Training Sessions', href: '/sessions', icon: Calendar },
+        { name: 'Student Dashboard', href: '/student/dashboard', icon: LayoutDashboard },
+        { name: 'Placement Drives', href: '/student/drives', icon: Briefcase },
+        { name: 'Training Sessions', href: '/student/sessions', icon: Calendar },
+        { name: 'My Profile', href: '/student/profile', icon: Users },
       ]
     : [
         { name: 'Dashboard', href: '/', icon: LayoutDashboard },

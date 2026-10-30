@@ -3,7 +3,7 @@
 **Generated / Audited**: 2026-10-29  
 **Institution**: D.Y. Patil College of Engineering & Technology (DYPCET), Kasaba Bawada, Kolhapur  
 **Current Branch**: `main`  
-**Test Suite Status**: 13/13 test files passing (245 tests passing, 0 failing)
+**Test Suite Status**: 17/17 test files passing (285 tests passing, 0 failing)
 
 ---
 
@@ -142,12 +142,13 @@ This document serves as the persistent audit log of all project phases and revie
 - **Profile photo upload & streaming API**: `Done` (`POST /api/students/[id]/photo`, `GET /api/students/[id]/photo` with storage adapter integration, magic byte image validation, 2MB limit, department isolation; test evidence: `tests/phase3b-profile-extensions.test.ts`)
 
 ### Phase 6 Student Portal & Step 3.5
-- Shipped strictly behind `STUDENT_PORTAL_ENABLED` (default `false`): `Missing`
-- Student account linking, own-record-only APIs: `Missing`
-- Application submit/withdraw before IST deadline: `Missing`
-- Attendance & schedule view, 1 feedback per session: `Missing`
-- Time-limited check-in code (no geolocation): `Missing`
-- Targeted notices & in-app notifications model: `Missing`
+- **Shipped strictly behind `STUDENT_PORTAL_ENABLED` (default `false`)**: `Done` (`src/config/collegeConfig.ts`, `src/lib/auth-guards.ts` rejects student sessions with 403 when false; student portal UI displays clear disabled message; test evidence: `tests/phase6-student-portal.test.ts`)
+- **Student account linking, own-record-only APIs**: `Done` (`src/models/User.ts` linked to `Student`; `src/app/api/student/profile/route.ts` GET own record, PUT self-update with academic integrity protection blocking CGPA/backlog/placement tampering; photo and resume upload APIs: `src/app/api/student/photo/route.ts`, `src/app/api/student/resume/route.ts`; test evidence: `tests/phase6-student-portal.test.ts`)
+- **Application submit/withdraw before IST deadline**: `Done` (`src/app/api/student/drives/route.ts` lists eligible drives; `POST /api/student/drives/[id]/apply` validates IST deadline and criteria, creates Application + notification; `POST /api/student/drives/[id]/withdraw` allows withdrawal before deadline while in 'Applied' status; test evidence: `tests/phase6-student-portal.test.ts`)
+- **Attendance & schedule view, 1 feedback per session**: `Done` (`src/app/api/student/sessions/route.ts` lists eligible training schedule; `POST /api/student/sessions/[id]/feedback` enforces attendance requirement and strictly ONE feedback per student per attended session, rejecting duplicates with 409; test evidence: `tests/phase6-student-portal.test.ts`)
+- **Time-limited check-in code (zero geolocation collection)**: `Done` (`POST /api/student/sessions/[id]/check-in` validates 6-character active session code, upserts Attendance to Present; zero geolocation collected anywhere; test evidence: `tests/phase6-student-portal.test.ts`)
+- **Targeted notices & in-app notifications model**: `Done` (`src/models/Notice.ts` and `src/app/api/student/notices/route.ts` targeted by department/batch; `src/models/Notification.ts` and `src/app/api/student/notifications/route.ts` with unread count badge in `Header.tsx` replacing empty bell; test evidence: `tests/phase6-student-portal.test.ts`)
+- **Student Portal UI**: `Done` (`src/app/student/dashboard/page.tsx`, `src/app/student/drives/page.tsx`, `src/app/student/sessions/page.tsx`, `src/app/student/profile/page.tsx`; responsive student navigation in `src/components/Sidebar.tsx`)
 
 ### Phase 8 Remainder & Step 3.6
 - Playwright E2E test suite: `Missing`

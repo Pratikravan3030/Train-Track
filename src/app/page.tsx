@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { 
   Users, 
   Calendar, 
@@ -70,6 +72,15 @@ interface StatsData {
 }
 
 export default function Dashboard() {
+  const { data: session } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (session?.user?.role === 'STUDENT') {
+      router.replace('/student/dashboard');
+    }
+  }, [session?.user?.role, router]);
+
   const [selectedBatch, setSelectedBatch] = useState<number>(DEFAULT_PASSOUT_YEAR);
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);

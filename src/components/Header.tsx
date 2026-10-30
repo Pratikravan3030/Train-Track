@@ -46,6 +46,16 @@ export default function Header({ onMenuToggle }: HeaderProps) {
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{
+    _id: string;
+    title: string;
+    message: string;
+    link?: string;
+    type: string;
+    read: boolean;
+    createdAt: string;
+  }>>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -58,6 +68,60 @@ export default function Header({ onMenuToggle }: HeaderProps) {
   const profileRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+
+  // Fetch notifications for student
+  useEffect(() => {
+    if (session?.user?.role !== 'STUDENT') return;
+
+    let mounted = true;
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch('/api/student/notifications');
+        if (res.ok) {
+          const data = await res.json();
+          if (mounted) {
+            setNotifications(data.notifications || []);
+            setUnreadCount(data.unreadCount || 0);
+          }
+        }
+      } catch {
+        // Silent degradation
+      }
+    };
+
+    fetchNotifications();
+    return () => {
+      mounted = false;
+    };
+  }, [session?.user?.role]);
+
+  const handleMarkAllRead = async () => {
+    try {
+      const res = await fetch('/api/student/notifications', { method: 'PATCH' });
+      if (res.ok) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+        setUnreadCount(0);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleMarkOneRead = async (id: string, link?: string) => {
+    try {
+      await fetch(`/api/student/notifications/${id}/read`, { method: 'POST' });
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === id ? { ...n, read: true } : n))
+      );
+      setUnreadCount((c) => Math.max(0, c - 1));
+      if (link) {
+        setIsNotificationsOpen(false);
+        router.push(link);
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   // 300ms Debounce search request to /api/search
   useEffect(() => {
@@ -299,28 +363,80 @@ export default function Header({ onMenuToggle }: HeaderProps) {
             className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 cursor-pointer"
           >
             <Bell className="h-4 w-4" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white shadow-xs animate-in zoom-in">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
 
-          {/* Notifications Dropdown: Clean state without fake indicators */}
+          {/* Notifications Dropdown */}
           {isNotificationsOpen && (
             <div
-              className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 py-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+              className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-slate-100 py-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
               role="region"
               aria-label="Notifications list"
             >
               <div className="px-4 pb-2 border-b border-slate-100 flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-800">Notifications</span>
-                <Badge variant="neutral" size="sm">0 active</Badge>
-              </div>
-              <div className="p-6 text-center">
-                <div className="h-10 w-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2.5">
-                  <Bell className="h-5 w-5" />
+                <div className="flex items-center gap-2">
+                  <Badge variant={unreadCount > 0 ? 'info' : 'neutral'} size="sm">
+                    {unreadCount} unread
+                  </Badge>
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleMarkAllRead}
+                      className="text-[10px] font-semibold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+                    >
+                      Mark all read
+                    </button>
+                  )}
                 </div>
-                <p className="text-xs font-bold text-slate-700">No notifications yet</p>
-                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                  In-app notifications and alerts will be enabled in Phase 6. Real-time updates for drives and deadlines will appear here.
-                </p>
               </div>
+
+              {notifications.length === 0 ? (
+                <div className="p-6 text-center">
+                  <div className="h-10 w-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2.5">
+                    <Bell className="h-5 w-5" />
+                  </div>
+                  <p className="text-xs font-bold text-slate-700">No notifications yet</p>
+                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    Announcements, placement drive alerts, and session updates will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                  {notifications.map((item) => (
+                    <div
+                      key={item._id}
+                      onClick={() => handleMarkOneRead(item._id, item.link)}
+                      className={`px-4 py-3 hover:bg-slate-50 transition-colors cursor-pointer flex items-start gap-3 ${
+                        !item.read ? 'bg-blue-50/40' : ''
+                      }`}
+                    >
+                      <div
+                        className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${
+                          !item.read ? 'bg-blue-600' : 'bg-transparent'
+                        }`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <p className={`text-xs ${!item.read ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
+                            {item.title}
+                          </p>
+                          <span className="text-[10px] text-slate-400 shrink-0">
+                            {new Date(item.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">
+                          {item.message}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

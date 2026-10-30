@@ -369,6 +369,7 @@ describe('Route-Level Authorization & Real Handler Scope Tests (In-Memory MongoD
   describe('STUDENT Role Boundary & Impersonation Prevention', () => {
     beforeEach(() => {
       mockUserSession = studentSession;
+      process.env.STUDENT_PORTAL_ENABLED = 'true';
     });
 
     it('DENIES student from reading student directory (403)', async () => {

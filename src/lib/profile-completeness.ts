@@ -10,6 +10,7 @@ export interface SectionCompleteness {
 
 export interface ProfileCompletenessResult {
   totalPercentage: number;
+  percentage: number;
   sections: {
     basic: SectionCompleteness;
     academic: SectionCompleteness;
@@ -163,5 +164,6 @@ export function calculateProfileCompleteness(
       },
     },
     recommendations,
+    percentage: totalPercentage,
   };
 }
