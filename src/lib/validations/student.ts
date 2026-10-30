@@ -12,6 +12,43 @@ export const placementDetailsSchema = z.object({
   reasonForStatusChange: z.string().trim().max(500).optional(),
 });
 
+export const GENDERS = ['Male', 'Female', 'Other', 'Prefer not to say'] as const;
+
+export const certificationSchema = z.object({
+  title: z.string().trim().min(1, 'Title is required'),
+  issuer: z.string().trim().min(1, 'Issuer is required'),
+  issueDate: z.string().trim().optional(),
+  url: z.string().trim().optional().or(z.literal('')),
+});
+
+export const projectSchema = z.object({
+  title: z.string().trim().min(1, 'Title is required'),
+  description: z.string().trim().optional(),
+  techStack: z.array(z.string().trim()).optional().default([]),
+  githubUrl: z.string().trim().optional().or(z.literal('')),
+  liveUrl: z.string().trim().optional().or(z.literal('')),
+});
+
+export const internshipSchema = z.object({
+  company: z.string().trim().min(1, 'Company is required'),
+  role: z.string().trim().min(1, 'Role is required'),
+  startDate: z.string().trim().optional(),
+  endDate: z.string().trim().optional(),
+  description: z.string().trim().optional(),
+});
+
+export const socialLinksSchema = z.object({
+  github: z.string().trim().optional().or(z.literal('')),
+  linkedin: z.string().trim().optional().or(z.literal('')),
+  portfolio: z.string().trim().optional().or(z.literal('')),
+});
+
+export const backlogHistorySchema = z.object({
+  active: z.number().int().min(0).default(0),
+  dead: z.number().int().min(0).default(0),
+  cleared: z.number().int().min(0).default(0),
+});
+
 export const createStudentSchema = z
   .object({
     name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100, 'Name must not exceed 100 characters'),
@@ -37,6 +74,17 @@ export const createStudentSchema = z
     backlogs: nullableNumber(z.number().int().min(0)).optional(),
     tenthPercentage: nullableNumber(z.number().min(0).max(100)).optional(),
     twelfthOrDiplomaPercentage: nullableNumber(z.number().min(0).max(100)).optional(),
+    gender: z.enum(GENDERS).optional(),
+    dateOfBirth: z.coerce.date().optional().nullable(),
+    division: z.string().trim().max(10).optional(),
+    semesterSgpa: z.array(z.number().min(0).max(10)).optional().default([]),
+    backlogHistory: backlogHistorySchema.optional(),
+    skills: z.array(z.string().trim()).optional().default([]),
+    certifications: z.array(certificationSchema).optional().default([]),
+    projects: z.array(projectSchema).optional().default([]),
+    internships: z.array(internshipSchema).optional().default([]),
+    socialLinks: socialLinksSchema.optional(),
+    photoUrl: z.string().trim().optional(),
     resumeUrl: z.string().trim().optional(),
     email: z.string().trim().email('Invalid email address').toLowerCase(),
     phone: z.string().trim().optional(),
@@ -66,6 +114,17 @@ export const updateStudentSchema = z.object({
   backlogs: nullableNumber(z.number().int().min(0)).optional(),
   tenthPercentage: nullableNumber(z.number().min(0).max(100)).optional(),
   twelfthOrDiplomaPercentage: nullableNumber(z.number().min(0).max(100)).optional(),
+  gender: z.enum(GENDERS).optional(),
+  dateOfBirth: z.coerce.date().optional().nullable(),
+  division: z.string().trim().max(10).optional(),
+  semesterSgpa: z.array(z.number().min(0).max(10)).optional(),
+  backlogHistory: backlogHistorySchema.optional(),
+  skills: z.array(z.string().trim()).optional(),
+  certifications: z.array(certificationSchema).optional(),
+  projects: z.array(projectSchema).optional(),
+  internships: z.array(internshipSchema).optional(),
+  socialLinks: socialLinksSchema.optional(),
+  photoUrl: z.string().trim().optional(),
   resumeUrl: z.string().trim().optional(),
   email: z.string().trim().email().toLowerCase().optional(),
   phone: z.string().trim().optional(),

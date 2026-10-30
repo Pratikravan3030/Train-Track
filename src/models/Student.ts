@@ -13,6 +13,44 @@ export interface IPlacementDetails {
   reasonForStatusChange?: string;
 }
 
+export const GENDERS = ['Male', 'Female', 'Other', 'Prefer not to say'] as const;
+export type Gender = (typeof GENDERS)[number];
+
+export interface ICertification {
+  title: string;
+  issuer: string;
+  issueDate?: string;
+  url?: string;
+}
+
+export interface IProject {
+  title: string;
+  description?: string;
+  techStack?: string[];
+  githubUrl?: string;
+  liveUrl?: string;
+}
+
+export interface IInternship {
+  company: string;
+  role: string;
+  startDate?: string;
+  endDate?: string;
+  description?: string;
+}
+
+export interface ISocialLinks {
+  github?: string;
+  linkedin?: string;
+  portfolio?: string;
+}
+
+export interface IBacklogHistory {
+  active: number;
+  dead: number;
+  cleared: number;
+}
+
 export interface IStudent extends Document {
   name: string;
   rollNumber: string;
@@ -26,6 +64,18 @@ export interface IStudent extends Document {
   backlogs?: number | null;
   tenthPercentage?: number | null;
   twelfthOrDiplomaPercentage?: number | null;
+  gender?: Gender;
+  dateOfBirth?: Date | null;
+  division?: string;
+  semesterSgpa?: number[];
+  backlogHistory?: IBacklogHistory;
+  skills?: string[];
+  certifications?: ICertification[];
+  projects?: IProject[];
+  internships?: IInternship[];
+  socialLinks?: ISocialLinks;
+  photoUrl?: string;
+  photoStorageKey?: string;
   resumeUrl?: string;
   resumeFilename?: string;
   resumeStorageKey?: string;
@@ -90,6 +140,53 @@ const StudentSchema: Schema = new Schema({
   backlogs: { type: Number, min: 0, default: null },
   tenthPercentage: { type: Number, min: 0, max: 100, default: null },
   twelfthOrDiplomaPercentage: { type: Number, min: 0, max: 100, default: null },
+  gender: {
+    type: String,
+    enum: GENDERS,
+    default: undefined,
+  },
+  dateOfBirth: { type: Date, default: null },
+  division: { type: String, trim: true },
+  semesterSgpa: { type: [Number], default: [] },
+  backlogHistory: {
+    active: { type: Number, default: 0 },
+    dead: { type: Number, default: 0 },
+    cleared: { type: Number, default: 0 },
+  },
+  skills: { type: [String], default: [] },
+  certifications: [
+    {
+      title: { type: String, required: true, trim: true },
+      issuer: { type: String, required: true, trim: true },
+      issueDate: { type: String, trim: true },
+      url: { type: String, trim: true },
+    },
+  ],
+  projects: [
+    {
+      title: { type: String, required: true, trim: true },
+      description: { type: String, trim: true },
+      techStack: { type: [String], default: [] },
+      githubUrl: { type: String, trim: true },
+      liveUrl: { type: String, trim: true },
+    },
+  ],
+  internships: [
+    {
+      company: { type: String, required: true, trim: true },
+      role: { type: String, required: true, trim: true },
+      startDate: { type: String, trim: true },
+      endDate: { type: String, trim: true },
+      description: { type: String, trim: true },
+    },
+  ],
+  socialLinks: {
+    github: { type: String, trim: true },
+    linkedin: { type: String, trim: true },
+    portfolio: { type: String, trim: true },
+  },
+  photoUrl: { type: String, trim: true },
+  photoStorageKey: { type: String, trim: true },
   resumeUrl: { type: String, trim: true },
   resumeFilename: { type: String, trim: true },
   resumeStorageKey: { type: String, trim: true },

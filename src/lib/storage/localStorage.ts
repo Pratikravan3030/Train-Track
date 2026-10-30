@@ -25,7 +25,7 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
     }
   }
 
-  private getFolderDir(folder: 'resumes' | 'offers'): string {
+  private getFolderDir(folder: 'resumes' | 'offers' | 'offer-letters' | 'photos'): string {
     const dir = path.join(this.baseDir, folder);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -44,7 +44,7 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
   }
 
   async saveFile(params: {
-    folder: 'resumes' | 'offers';
+    folder: 'resumes' | 'offers' | 'offer-letters' | 'photos';
     buffer: Buffer;
     contentType?: string;
   }): Promise<StorageFileResult> {
@@ -52,7 +52,12 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
 
     const folderDir = this.getFolderDir(params.folder);
     const fileId = crypto.randomUUID();
-    const filename = `${fileId}.pdf`;
+    let ext = '.pdf';
+    if (params.contentType === 'image/jpeg') ext = '.jpg';
+    else if (params.contentType === 'image/png') ext = '.png';
+    else if (params.contentType === 'image/webp') ext = '.webp';
+
+    const filename = `${fileId}${ext}`;
     const targetPath = path.join(folderDir, filename);
 
     await fs.promises.writeFile(targetPath, params.buffer);
@@ -71,9 +76,18 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
     }
 
     const buffer = await fs.promises.readFile(resolvedPath);
+    let contentType = 'application/pdf';
+    if (key.endsWith('.jpg') || key.endsWith('.jpeg')) {
+      contentType = 'image/jpeg';
+    } else if (key.endsWith('.png')) {
+      contentType = 'image/png';
+    } else if (key.endsWith('.webp')) {
+      contentType = 'image/webp';
+    }
+
     return {
       buffer,
-      contentType: 'application/pdf',
+      contentType,
       contentLength: buffer.length,
     };
   }

@@ -55,6 +55,55 @@ export async function saveResume(
   };
 }
 
+export function isValidImage(buffer: Buffer): { valid: boolean; contentType?: string } {
+  if (buffer.length < 8) return { valid: false };
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return { valid: true, contentType: 'image/jpeg' };
+  }
+  // PNG: 89 50 4E 47
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+    return { valid: true, contentType: 'image/png' };
+  }
+  // WebP: RIFF ... WEBP
+  if (
+    buffer.toString('ascii', 0, 4) === 'RIFF' &&
+    buffer.toString('ascii', 8, 12) === 'WEBP'
+  ) {
+    return { valid: true, contentType: 'image/webp' };
+  }
+  return { valid: false };
+}
+
+export async function savePhoto(
+  studentId: string,
+  buffer: Buffer
+): Promise<{ key: string; relativeUrl: string; contentType: string }> {
+  if (buffer.length > MAX_FILE_SIZE_BYTES) {
+    throw new Error(
+      `Photo size exceeds 2MB limit (${(buffer.length / (1024 * 1024)).toFixed(2)} MB).`
+    );
+  }
+
+  const { valid, contentType } = isValidImage(buffer);
+  if (!valid || !contentType) {
+    throw new Error('Invalid image format. Allowed formats: JPEG, PNG, WebP.');
+  }
+
+  const adapter = getStorageAdapter();
+  const { key } = await adapter.saveFile({
+    folder: 'photos',
+    buffer,
+    contentType,
+  });
+
+  return {
+    key,
+    relativeUrl: `/api/students/${studentId}/photo`,
+    contentType,
+  };
+}
+
 /**
  * Resolves safe absolute path for a resume filename, preventing directory traversal.
  * Kept for legacy fallback when reading local disk files.

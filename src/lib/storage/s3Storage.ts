@@ -53,13 +53,17 @@ export class S3CompatibleStorageAdapter implements StorageAdapter {
   }
 
   async saveFile(params: {
-    folder: 'resumes' | 'offers';
+    folder: 'resumes' | 'offers' | 'offer-letters' | 'photos';
     buffer: Buffer;
     contentType?: string;
   }): Promise<StorageFileResult> {
     const { client, bucket } = this.getClient();
     const fileId = crypto.randomUUID();
-    const key = `${params.folder}/${fileId}.pdf`;
+    let ext = '.pdf';
+    if (params.contentType === 'image/jpeg') ext = '.jpg';
+    else if (params.contentType === 'image/png') ext = '.png';
+    else if (params.contentType === 'image/webp') ext = '.webp';
+    const key = `${params.folder}/${fileId}${ext}`;
 
     await client.send(
       new PutObjectCommand({

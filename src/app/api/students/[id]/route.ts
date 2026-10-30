@@ -7,6 +7,8 @@ import { requirePermission, canAccessDepartment } from '@/lib/auth-guards';
 import { logAudit } from '@/lib/audit';
 import { updateStudentSchema } from '@/lib/validations/student';
 import { resolveStudentDepartment } from '@/lib/departmentMapper';
+import { calculateProfileCompleteness } from '@/lib/profile-completeness';
+import { redactStudentDemographics } from '@/lib/demographic-redaction';
 
 export async function GET(
   request: Request,
@@ -42,7 +44,15 @@ export async function GET(
       .populate('sessionId', 'title date')
       .sort({ createdAt: -1 });
 
-    return NextResponse.json({ student, attendance, feedback }, { status: 200 });
+    const studentObj = student.toObject ? student.toObject() : student;
+    const completeness = calculateProfileCompleteness(studentObj);
+    const isOwnRecord = auth.user.studentId === id;
+    const redactedStudent = redactStudentDemographics(studentObj, auth.user.role, Boolean(isOwnRecord));
+
+    return NextResponse.json(
+      { student: redactedStudent, attendance, feedback, completeness },
+      { status: 200 }
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     console.error('[GET /api/students/[id] error]:', message);
@@ -98,6 +108,17 @@ export async function PUT(
       resumeUrl,
       email,
       phone,
+      gender,
+      dateOfBirth,
+      division,
+      semesterSgpa,
+      backlogHistory,
+      skills,
+      certifications,
+      projects,
+      internships,
+      socialLinks,
+      photoUrl,
     } = parseResult.data;
 
     // Field whitelisting per role: Only TPO and SUPER_ADMIN can modify placement status
@@ -167,6 +188,17 @@ export async function PUT(
     if (passoutYear !== undefined) updatePayload.passoutYear = passoutYear;
     if (email !== undefined) updatePayload.email = email;
     if (phone !== undefined) updatePayload.phone = phone;
+    if (gender !== undefined) updatePayload.gender = gender;
+    if (dateOfBirth !== undefined) updatePayload.dateOfBirth = dateOfBirth;
+    if (division !== undefined) updatePayload.division = division;
+    if (semesterSgpa !== undefined) updatePayload.semesterSgpa = semesterSgpa;
+    if (backlogHistory !== undefined) updatePayload.backlogHistory = backlogHistory;
+    if (skills !== undefined) updatePayload.skills = skills;
+    if (certifications !== undefined) updatePayload.certifications = certifications;
+    if (projects !== undefined) updatePayload.projects = projects;
+    if (internships !== undefined) updatePayload.internships = internships;
+    if (socialLinks !== undefined) updatePayload.socialLinks = socialLinks;
+    if (photoUrl !== undefined) updatePayload.photoUrl = photoUrl;
     if (cgpa !== undefined) updatePayload.cgpa = cgpa;
     if (backlogs !== undefined) updatePayload.backlogs = backlogs;
     if (tenthPercentage !== undefined) updatePayload.tenthPercentage = tenthPercentage;
@@ -224,7 +256,21 @@ export async function PUT(
       details: { rollNumber: updatedStudent?.rollNumber, department: updatedStudent?.department },
     });
 
-    return NextResponse.json(updatedStudent, { status: 200 });
+    const studentObj = updatedStudent?.toObject ? updatedStudent.toObject() : updatedStudent;
+    const completeness = studentObj ? calculateProfileCompleteness(studentObj) : null;
+    const isOwnRecord = auth.user.studentId === id;
+    const redactedStudent = studentObj
+      ? redactStudentDemographics(studentObj, auth.user.role, Boolean(isOwnRecord))
+      : null;
+
+    return NextResponse.json(
+      {
+        ...(redactedStudent || {}),
+        student: redactedStudent,
+        completeness,
+      },
+      { status: 200 }
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     console.error('[PUT /api/students/[id] error]:', message);

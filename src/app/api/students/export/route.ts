@@ -5,6 +5,7 @@ import { requirePermission, canAccessDepartment } from '@/lib/auth-guards';
 import { logAudit } from '@/lib/audit';
 import { serializeCsv } from '@/lib/csv';
 import { DEFAULT_PASSOUT_YEAR } from '@/config/collegeConfig';
+import { canViewDemographics } from '@/lib/demographic-redaction';
 
 export async function GET(request: Request) {
   const auth = await requirePermission('students', 'export');
@@ -91,7 +92,7 @@ export async function GET(request: Request) {
       tenthPercentage: s.tenthPercentage != null ? s.tenthPercentage : '',
       twelfthOrDiplomaPercentage: s.twelfthOrDiplomaPercentage != null ? s.twelfthOrDiplomaPercentage : '',
       email: s.email || '',
-      phone: s.phone || '',
+      phone: canViewDemographics(auth.user.role) ? (s.phone || '') : '[REDACTED]',
     }));
 
     const csvContent = serializeCsv(csvHeaders, dataRows);

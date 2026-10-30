@@ -6,6 +6,7 @@ import { logAudit } from '@/lib/audit';
 import { studentQuerySchema, createStudentSchema } from '@/lib/validations/student';
 import { resolveStudentDepartment } from '@/lib/departmentMapper';
 import { DEFAULT_PASSOUT_YEAR } from '@/config/collegeConfig';
+import { redactStudentListDemographics } from '@/lib/demographic-redaction';
 
 export async function GET(request: Request) {
   const auth = await requirePermission('students', 'read');
@@ -96,9 +97,11 @@ export async function GET(request: Request) {
     // Support unpaginated fetch when specifically requested (e.g. for complete attendance lists or exports)
     if (all === 'true') {
       const allStudents = await Student.find(filter).sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 });
+      const rawList = allStudents.map((s) => (s.toObject ? s.toObject() : s));
+      const sanitized = redactStudentListDemographics(rawList, auth.user.role, auth.user.studentId);
       return NextResponse.json(
         {
-          data: allStudents,
+          data: sanitized,
           pagination: {
             page: 1,
             limit: allStudents.length,
@@ -146,9 +149,12 @@ export async function GET(request: Request) {
       if (y._id) yearCounts[y._id] = y.count;
     });
 
+    const rawList = students.map((s) => (s.toObject ? s.toObject() : s));
+    const sanitizedStudents = redactStudentListDemographics(rawList, auth.user.role, auth.user.studentId);
+
     return NextResponse.json(
       {
-        data: students,
+        data: sanitizedStudents,
         pagination: {
           page,
           limit,
@@ -201,6 +207,17 @@ export async function POST(request: Request) {
       resumeUrl,
       email,
       phone,
+      gender,
+      dateOfBirth,
+      division,
+      semesterSgpa,
+      backlogHistory,
+      skills,
+      certifications,
+      projects,
+      internships,
+      socialLinks,
+      photoUrl,
     } = parseResult.data;
 
     let validatedDepartment: string;
@@ -252,6 +269,17 @@ export async function POST(request: Request) {
       resumeUrl,
       email,
       phone,
+      gender,
+      dateOfBirth,
+      division,
+      semesterSgpa,
+      backlogHistory,
+      skills,
+      certifications,
+      projects,
+      internships,
+      socialLinks,
+      photoUrl,
     });
 
     await logAudit({

@@ -135,10 +135,11 @@ This document serves as the persistent audit log of all project phases and revie
 - **Time-limited check-in code**: `Done` (`POST /api/sessions/[id]/check-in-code` generates 6-char alphanumeric code valid for 15 minutes; interactive generator & copy UI on `src/app/sessions/[id]/page.tsx`; zero geolocation collection; test evidence: `tests/phase5-training-upgrade.test.ts`)
 
 ### Phase 3b Profile Extensions & Step 3.4
-- Comprehensive schema extensions in `Student.ts`: `Missing`
-- Role-based demographic redaction (hide DOB/gender/phone): `Missing`
-- Profile completeness meter: `Missing`
-- Tabbed staff profile view: `Missing`
+- **Comprehensive schema extensions in `Student.ts`**: `Done` (`Student.ts` extended with `gender`, `dateOfBirth`, `division`, `semesterSgpa`, `backlogHistory`, `skills`, `certifications`, `projects`, `internships`, `socialLinks`, `photoUrl`, `photoStorageKey`; validations in `src/lib/validations/student.ts`; test evidence: `tests/phase3b-profile-extensions.test.ts`)
+- **Role-based demographic redaction (hide DOB/gender/phone)**: `Done` (`src/lib/demographic-redaction.ts` redacts DOB, gender, and phone for `DEPT_COORDINATOR` across `GET /api/students`, `GET /api/students/[id]`, and `GET /api/students/export`; test evidence: `tests/phase3b-profile-extensions.test.ts`)
+- **Profile completeness meter**: `Done` (`src/lib/profile-completeness.ts` calculates section-by-section and overall completeness percentage with actionable recommendations; test evidence: `tests/phase3b-profile-extensions.test.ts`)
+- **Tabbed staff profile view**: `Done` (`src/app/students/[id]/page.tsx` with Academics, Skills/Projects/Experience, Documents/Photo, and Placements/Training tabs; completeness meter banner, demographic redaction notice)
+- **Profile photo upload & streaming API**: `Done` (`POST /api/students/[id]/photo`, `GET /api/students/[id]/photo` with storage adapter integration, magic byte image validation, 2MB limit, department isolation; test evidence: `tests/phase3b-profile-extensions.test.ts`)
 
 ### Phase 6 Student Portal & Step 3.5
 - Shipped strictly behind `STUDENT_PORTAL_ENABLED` (default `false`): `Missing`
