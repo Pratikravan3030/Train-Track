@@ -22,6 +22,14 @@ async function dbConnect(): Promise<typeof mongoose> {
     throw new Error(errorMsg);
   }
 
+  // Hard safety limit: Never connect to remote cluster during development/test runs
+  if (process.env.NODE_ENV !== 'production' && uri.includes('mongodb.net')) {
+    const abortMsg =
+      'HARD LIMIT ABORT: MONGODB_URI contains mongodb.net. Only local or in-memory MongoDB is permitted for local development and test runs.';
+    console.error(`[dbConnect Safety Abort]: ${abortMsg}`);
+    throw new Error(abortMsg);
+  }
+
   if (cached!.conn) {
     return cached!.conn;
   }

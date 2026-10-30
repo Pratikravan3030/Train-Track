@@ -151,6 +151,6 @@ This document serves as the persistent audit log of all project phases and revie
 - **Student Portal UI**: `Done` (`src/app/student/dashboard/page.tsx`, `src/app/student/drives/page.tsx`, `src/app/student/sessions/page.tsx`, `src/app/student/profile/page.tsx`; responsive student navigation in `src/components/Sidebar.tsx`)
 
 ### Phase 8 Remainder & Step 3.6
-- Playwright E2E test suite: `Missing`
-- Accessibility (axe-core) automated checks: `Missing`
-- Responsive layout verification (375px, 768px, 1280px): `Missing`
+- **Playwright E2E test suite**: `Done` (`playwright.config.ts`, `e2e/auth.spec.ts`, `e2e/responsive-and-a11y.spec.ts`; npm script `"test:e2e"`)
+- **Accessibility (axe-core) automated checks**: `Done` (`@axe-core/playwright` WCAG 2.0/2.1 AA audits on login, entry, and error routes with 0 critical or serious violations)
+- **Responsive layout verification (375px, 768px, 1280px)**: `Done` (Playwright automated viewport assertions confirming zero horizontal overflow and clean responsive layout across mobile 375x667, tablet 768x1024, and desktop 1280x800)
